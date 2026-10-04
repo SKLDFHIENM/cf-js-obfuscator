@@ -201,6 +201,72 @@
         }
 
         /* 按钮与操作区域 */
+        
+        /* 混淆模式预设配置卡片 */
+        .config-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+            padding: 12px 16px;
+            background: #181c24;
+            border: 1px solid #2d333b;
+            border-radius: 8px;
+        }
+
+        .mode-option {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 10px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            border: 1px solid #30363d;
+            background: #1e222b;
+            transition: all 0.2s ease;
+        }
+
+        .mode-option:hover {
+            border-color: #58a6ff;
+            background: #252b37;
+        }
+
+        .mode-option.active {
+            background: rgba(33, 150, 243, 0.12);
+            border-color: #2196f3;
+        }
+
+        .mode-radio {
+            margin-top: 3px;
+            cursor: pointer;
+            accent-color: var(--primary-blue);
+        }
+
+        .mode-info h4 {
+            font-size: 13.5px;
+            font-weight: 600;
+            color: #ffffff;
+            margin-bottom: 3px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .mode-info p {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        .mode-tag {
+            font-size: 10.5px;
+            padding: 1px 6px;
+            border-radius: 4px;
+            background: rgba(33, 150, 243, 0.2);
+            color: #64b5f6;
+            font-weight: 500;
+        }
+
         .controls-bar {
             display: flex;
             align-items: center;
@@ -319,6 +385,25 @@
         </div>
 
         <!-- 底部控制按钮与统计 -->
+        
+        <!-- 混淆模式预设选择 -->
+        <div class="config-bar">
+            <label class="mode-option active" id="label-mode-armor" onclick="selectObfMode('armor')">
+                <input type="radio" name="obf-mode" id="mode-armor" value="armor" class="mode-radio" checked>
+                <div class="mode-info">
+                    <h4>深度装甲混淆 <span class="mode-tag">cfnew 强化</span></h4>
+                    <p>Base64 动态加解密 + 字符串切片 + Unicode 转义 + 保护 CF Workers 运行时全系标准 API</p>
+                </div>
+            </label>
+            <label class="mode-option" id="label-mode-safe" onclick="selectObfMode('safe')">
+                <input type="radio" name="obf-mode" id="mode-safe" value="safe" class="mode-radio">
+                <div class="mode-info">
+                    <h4>极致稳定/多重混淆 <span class="mode-tag" style="background:rgba(76,175,80,0.2);color:#81c784;">二次混淆友好</span></h4>
+                    <p>轻量局部混淆与变量置换，零解码开销，100% 免疫循环嵌套与 AST 崩溃</p>
+                </div>
+            </label>
+        </div>
+
         <div class="controls-bar">
             <div class="btn-group-left">
                 <button id="process-btn" class="btn btn-primary" disabled>
@@ -396,6 +481,49 @@
 
         
         // Cloudflare Workers 语法与兼容性深度预检
+        
+        let currentObfMode = "armor";
+
+        function selectObfMode(mode) {
+            currentObfMode = mode;
+            const rArmor = document.getElementById("mode-armor");
+            const rSafe = document.getElementById("mode-safe");
+            const lArmor = document.getElementById("label-mode-armor");
+            const lSafe = document.getElementById("label-mode-safe");
+            if (mode === "armor") {
+                rArmor.checked = true;
+                lArmor.classList.add("active");
+                lSafe.classList.remove("active");
+            } else {
+                rSafe.checked = true;
+                lSafe.classList.add("active");
+                lArmor.classList.remove("active");
+            }
+        }
+
+        // Cloudflare Workers 官方标准保留字表 (严格对齐 Cloudflare Web Standards API 文档)
+        const CF_RESERVED_NAMES = [
+            "^addEventListener$", "^removeEventListener$", "^dispatchEvent$",
+            "^fetch$", "^scheduled$", "^queue$", "^email$", "^tail$", "^trace$",
+            "^Request$", "^Response$", "^Headers$", "^URL$", "^URLSearchParams$", "^URLPattern$",
+            "^Blob$", "^File$", "^FormData$", "^ReadableStream$", "^WritableStream$", "^TransformStream$",
+            "^ByteLengthQueuingStrategy$", "^CountQueuingStrategy$",
+            "^TextEncoder$", "^TextDecoder$", "^TextEncoderStream$", "^TextDecoderStream$",
+            "^CompressionStream$", "^DecompressionStream$",
+            "^Event$", "^CustomEvent$", "^EventTarget$", "^MessageEvent$", "^CloseEvent$", "^ErrorEvent$",
+            "^crypto$", "^CryptoKey$", "^SubtleCrypto$", "^DigestStream$",
+            "^atob$", "^btoa$", "^setTimeout$", "^clearTimeout$", "^setInterval$", "^clearInterval$", "^queueMicrotask$",
+            "^performance$", "^PerformanceEntry$", "^PerformanceMark$", "^PerformanceMeasure$",
+            "^console$", "^navigator$", "^structuredClone$",
+            "^WebSocket$", "^WebSocketPair$", "^HTMLRewriter$", "^caches$", "^Cache$",
+            "^env$", "^ctx$", "^context$", "^request$", "^event$",
+            "^connect$", "^connectAsync$", "^Socket$", "^SocketOptions$", "^SocketAddress$", "^TlsOptions$",
+            "^D1Database$", "^D1PreparedStatement$", "^D1Result$", "^D1ExecResult$",
+            "^KVNamespace$", "^R2Bucket$", "^DurableObjectNamespace$", "^VectorizeIndex$",
+            "^AnalyticsEngineDataset$", "^Workflow$", "^Service$", "^Fetcher$",
+            "^export$", "^default$", "^import\\.meta$", "^import\\.meta\\.url$"
+        ];
+
         function verifyCloudflareCompatibility(code) {
             const checks = [];
             
@@ -574,82 +702,100 @@
         });
 
         // 核心混淆逻辑（严格保持原生配置，确保已混淆代码能顺畅二次混淆）
-        processBtn.addEventListener("click", () => {
+                processBtn.addEventListener("click", () => {
             const rawSource = inputCode.value.trim();
             if (!rawSource) return;
 
             processBtn.disabled = true;
             processBtn.innerText = "混淆中...";
-            statusTip.innerText = "正在进行 AST 分析与混淆...";
+            statusTip.innerText = "正在进行 AST 分析与深度防护处理...";
             statusTip.style.color = "var(--primary-blue)";
             outputBadge.innerText = "混淆中";
 
             setTimeout(() => {
                 try {
-                    const config = {
-                        // ==================== 基础输出配置 ====================
-                        compact: true,                          // 紧凑单行输出，减少体积，提升 Worker 加载速度
-                        sourceMap: false,                       // 关闭 source map，生产环境不需要
-                        target: "browser",                      // 输出目标为浏览器环境，适配 Cloudflare Workers 的 V8 引擎
-                        
-                        // ==================== 控制流保护（完全禁用，避免 CPU 超时） ====================
-                        controlFlowFlattening: false,           // 禁用控制流扁平化，避免在 Worker 中引发 CPU 超时
-                        controlFlowFlatteningThreshold: 0,
-                        deadCodeInjection: false,               // 禁用死代码注入，减少内存占用
-                        simplify: false,                        // 【关键】设为 false，确保对已混淆代码二次混淆不破坏 AST，且不误删内容
-                        
-                        // ==================== 变量名混淆配置 ====================
-                        renameGlobals: false,                   // 禁用全局变量混淆，防止核心对象被重命名导致崩溃
-                        identifierNamesGenerator: "mangled-shuffled", // 极短随机局部变量名
-                        identifierNamesCache: null,
-                        identifiersPrefix: "",                  // 原生命名规则
-                        
-                        // 全局保留字列表（保护 Worker 环境必需的关键标识符，兼容 sockets 代理与原生接口）
-                        reservedNames: [
-                            "^self$", "^postMessage$", "^onmessage$", "^close$",
-                            "^addEventListener$", "^removeEventListener$",
-                            "^fetch$", "^Request$", "^Response$", "^Headers$",
-                            "^crypto$", "^subtle$",
-                            "^performance$", "^Date$", "^setTimeout$", "^clearTimeout$",
-                            "^setInterval$", "^clearInterval$",
-                            "^console$", "^debugger$",
-                            "^env$", "^ctx$", "^context$", "^request$",
-                            "^import\\.meta$", "^import\\.meta\\.url$",
-                            "^connect$", "^export$", "^default$", "^WebSocket$", "^HTMLRewriter$"
-                        ],
-                        
-                        // ==================== 属性名混淆（严格禁用，确保 API 正常） ====================
-                        renameProperties: false,
-                        renamePropertiesMode: "safe",
-                        
-                        // ==================== 字符串深度保护（优化版，平衡安全与兼容性） ====================
-                        stringArray: true,                      // 开启全局字符串阵列
-                        stringArrayEncoding: ["none"],          // 禁用动态解码，降低 Worker 内存和 CPU 运行开销
-                        stringArrayThreshold: 0.8,              // 80% 字符串抽离
-                        stringArrayRotate: false,               // 禁用自执行数组滚动，避免重复混淆时死循环
-                        stringArrayShuffle: true,               // 打乱数组顺序，切断静态上下文分析
-                        stringArrayWrappersCount: 1,            // 1 层包装函数
-                        stringArrayWrappersType: "variable",    // 变量包装型，极致轻量
-                        stringArrayWrappersChainedCalls: false, // 禁用链式调用
-                        stringArrayWrappersParametersMaxCount: 2,
-                        stringArrayCallsTransform: false,       // 禁用调用转换
-                        
-                        // ==================== 兼容性关键设置 ====================
-                        splitStrings: false,                    // 禁用字符串拆分，保障动态导入
-                        splitStringsChunkLength: 5,
-                        unicodeEscapeSequence: false,           // 禁用 Unicode 转义
-                        numbersToExpressions: false,            // 禁用数字计算表达式
-                        transformObjectKeys: false,             // 保持对象键结构稳定
-                        selfDefending: false,                   // 禁用自我防御
-                        debugProtection: false,                 // 禁用反调试
-                        debugProtectionInterval: 0,
-                        disableConsoleOutput: false,            // 保留控制台输出
-                        domainLock: [],                         // 不锁定域名
-                        ignoreImports: true                     // 保护 ES 模块导入导出语法 (import/export)
-                    };
-
                     if (typeof JavaScriptObfuscator === "undefined") {
-                        throw new Error("JavaScriptObfuscator 库未加载，请刷新页面后重试");
+                        throw new Error("JavaScriptObfuscator 核心库未载入，请刷新页面重试");
+                    }
+
+                    let config;
+
+                    if (currentObfMode === "armor") {
+                        // ==================== 方案 A: 深度装甲模式 (byJoey/cfnew 强化) ====================
+                        config = {
+                            compact: true,
+                            sourceMap: false,
+                            target: "browser",
+                            controlFlowFlattening: false,
+                            controlFlowFlatteningThreshold: 0,
+                            deadCodeInjection: false,
+                            simplify: false,
+                            renameGlobals: false, // 严格保持 false，避免篡改 Workers 原生全局变量与环境
+                            identifierNamesGenerator: "mangled-shuffled",
+                            identifierNamesCache: null,
+                            identifiersPrefix: "",
+                            reservedNames: CF_RESERVED_NAMES,
+                            renameProperties: false,
+                            renamePropertiesMode: "safe",
+                            ignoreImports: true,  // 严格保护 import { connect } 与 export default
+                            stringArray: true,
+                            stringArrayEncoding: ["base64"], // Base64 编码字符串
+                            stringArrayThreshold: 0.95,
+                            stringArrayRotate: true,
+                            stringArrayShuffle: true,
+                            stringArrayWrappersCount: 2,
+                            stringArrayWrappersChainedCalls: false,
+                            stringArrayWrappersParametersMaxCount: 3,
+                            stringArrayCallsTransform: false,
+                            splitStrings: true,
+                            splitStringsChunkLength: 3,
+                            transformObjectKeys: false,
+                            unicodeEscapeSequence: true,
+                            numbersToExpressions: false,
+                            selfDefending: false,
+                            debugProtection: false,
+                            debugProtectionInterval: 0,
+                            disableConsoleOutput: false,
+                            domainLock: []
+                        };
+                    } else {
+                        // ==================== 方案 B: 极致稳定/多重混淆模式 (二次混淆友好) ====================
+                        config = {
+                            compact: true,
+                            sourceMap: false,
+                            target: "browser",
+                            controlFlowFlattening: false,
+                            controlFlowFlatteningThreshold: 0,
+                            deadCodeInjection: false,
+                            simplify: false,
+                            renameGlobals: false,
+                            identifierNamesGenerator: "mangled-shuffled",
+                            identifierNamesCache: null,
+                            identifiersPrefix: "",
+                            reservedNames: CF_RESERVED_NAMES,
+                            renameProperties: false,
+                            renamePropertiesMode: "safe",
+                            ignoreImports: true,
+                            stringArray: true,
+                            stringArrayEncoding: ["none"],
+                            stringArrayThreshold: 0.85,
+                            stringArrayRotate: false,
+                            stringArrayShuffle: true,
+                            stringArrayWrappersCount: 1,
+                            stringArrayWrappersType: "variable",
+                            stringArrayWrappersChainedCalls: false,
+                            stringArrayWrappersParametersMaxCount: 2,
+                            stringArrayCallsTransform: false,
+                            splitStrings: false,
+                            unicodeEscapeSequence: false,
+                            numbersToExpressions: false,
+                            transformObjectKeys: false,
+                            selfDefending: false,
+                            debugProtection: false,
+                            debugProtectionInterval: 0,
+                            disableConsoleOutput: false,
+                            domainLock: []
+                        };
                     }
 
                     const obfuscationResult = JavaScriptObfuscator.obfuscate(rawSource, config);
@@ -662,7 +808,7 @@
 
                     processBtn.disabled = false;
                     processBtn.innerText = "⚡ 开始混淆";
-                    statusTip.innerText = "🎉 混淆完成！可直接复制或下载";
+                    statusTip.innerText = "🎉 混淆完成！已适配 Cloudflare Workers 规范";
                     statusTip.style.color = "var(--success-color)";
                 } catch (err) {
                     console.error(err);
