@@ -8,13 +8,13 @@
     <script src="/index.browser.js" onerror="loadFallbackCDN(this)"></script>
     <script>
         function loadFallbackCDN(el) {
-            console.warn("Local Worker JS load failed, trying cdnjs...");
+            console.warn("Local worker /index.browser.js failed, trying jsDelivr...");
             const s1 = document.createElement("script");
-            s1.src = "https://cdnjs.cloudflare.com/ajax/libs/javascript-obfuscator/4.1.1/index.browser.js";
+            s1.src = "https://cdn.jsdelivr.net/npm/javascript-obfuscator@4.1.1/dist/index.browser.js";
             s1.onerror = function() {
-                console.warn("cdnjs failed, trying jsdelivr...");
+                console.warn("jsDelivr failed, trying unpkg...");
                 const s2 = document.createElement("script");
-                s2.src = "https://cdn.jsdelivr.net/npm/javascript-obfuscator@4.1.1/dist/index.browser.js";
+                s2.src = "https://unpkg.com/javascript-obfuscator@4.1.1/dist/index.browser.js";
                 document.head.appendChild(s2);
             };
             document.head.appendChild(s1);
@@ -165,6 +165,17 @@
     </div>
 
     <script>
+        
+        // 核心库异步加载状态监测
+        window.addEventListener("DOMContentLoaded", () => {
+            const checkInterval = setInterval(() => {
+                if (typeof JavaScriptObfuscator !== "undefined") {
+                    clearInterval(checkInterval);
+                    console.log("JavaScriptObfuscator 引擎加载就绪");
+                }
+            }, 200);
+        });
+
         const dropZone = document.getElementById("drop-zone");
         const dzPrompt = document.getElementById("dz-prompt");
         const fileInfo = document.getElementById("file-info");
