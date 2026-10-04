@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Cloudflare JS 混淆加固工具箱</title>
-    <!-- 多重容灾加载混淆器核心库 -->
+    <title>Cloudflare JS混淆工具</title>
     <script src="/index.browser.js" onerror="loadFallbackCDN(this)"></script>
     <script>
         function loadFallbackCDN(el) {
@@ -22,232 +21,98 @@
     </script>
     <style>
         :root {
-            --bg-color: #0f1117;
-            --container-bg: #181b24;
-            --text-primary: #e6edf3;
-            --text-secondary: #8b949e;
-            --border-color: #30363d;
+            --bg-color: #121212;
+            --container-bg: #1e1e1e;
+            --text-primary: #e0e0e0;
+            --border-color: #333333;
             --primary-blue: #2196f3;
-            --hover-blue: #1976d2;
-            --accent-purple: #8b5cf6;
-            --success-color: #2ea043;
-            --card-bg: #21262d;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body { 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background-color: var(--bg-color); 
             color: var(--text-primary); 
             display: flex;
             align-items: center;
             justify-content: center;
             min-height: 100vh;
-            padding: 20px 15px;
+            padding: 15px;
         }
 
         .main-container {
             width: 100%;
-            max-width: 540px;
+            max-width: 500px;
             background-color: var(--container-bg);
-            padding: 30px 24px;
-            border-radius: 14px;
+            padding: 25px;
+            border-radius: 12px;
             border: 1px solid var(--border-color);
-            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.5);
         }
 
-        .header-title {
-            text-align: center;
-            margin-bottom: 6px;
-            font-size: 1.55rem;
-            font-weight: 700;
-            background: linear-gradient(90deg, #60a5fa, #a78bfa);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        
-        .header-subtitle {
-            text-align: center;
-            color: var(--text-secondary);
-            font-size: 13px;
-            margin-bottom: 22px;
-        }
-
-        /* 模式选择标签栏 */
-        .mode-selector {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 8px;
-            margin-bottom: 18px;
-            background: #12151c;
-            padding: 5px;
-            border-radius: 10px;
-            border: 1px solid #282e38;
-        }
-
-        .mode-btn {
-            background: transparent;
-            border: none;
-            color: var(--text-secondary);
-            padding: 9px 4px;
-            font-size: 12.5px;
-            font-weight: 600;
-            border-radius: 7px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 3px;
-        }
-
-        .mode-btn.active {
-            background: var(--primary-blue);
-            color: #ffffff;
-            box-shadow: 0 2px 8px rgba(33, 150, 243, 0.4);
-        }
-
-        .mode-desc {
-            font-size: 12px;
-            color: #8c959f;
-            background: rgba(255, 255, 255, 0.03);
-            border-left: 3px solid var(--primary-blue);
-            padding: 8px 12px;
-            border-radius: 0 6px 6px 0;
-            margin-bottom: 18px;
-            line-height: 1.5;
-        }
+        h2 { text-align: center; margin-bottom: 20px; font-size: 1.4rem; }
 
         #drop-zone { 
             border: 2px dashed var(--border-color); 
-            padding: 38px 16px;
+            padding: 40px 15px;
             text-align: center; 
             cursor: pointer; 
-            background-color: rgba(255, 255, 255, 0.015);
-            border-radius: 10px;
-            min-height: 150px;
+            background-color: rgba(255,255,255,0.02);
+            border-radius: 8px;
+            min-height: 160px;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            transition: all 0.25s ease;
         }
 
-        #drop-zone:hover, #drop-zone.dragover { 
-            border-color: var(--primary-blue); 
-            background-color: rgba(33, 150, 243, 0.05); 
-        }
+        #drop-zone.dragover { border-color: var(--primary-blue); background-color: rgba(33,150,243,0.05); }
 
         .dz-icon { font-size: 32px; margin-bottom: 10px; }
-        .dz-text { color: var(--text-secondary); font-size: 13.5px; line-height: 1.5; }
+        .dz-text { color: #888; font-size: 14px; }
 
         #file-info { display: none; text-align: center; width: 100%; }
-        #filename-text { color: #58a6ff; font-weight: 600; font-size: 14.5px; margin-top: 6px; word-break: break-all; }
-        #filesize-text { color: #7d8590; font-size: 12px; margin-top: 4px; }
+        #filename-text { color: var(--primary-blue); font-weight: bold; font-size: 15px; margin-top: 8px; }
 
-        /* 统计卡片 */
-        .stats-box {
-            display: none;
-            margin-top: 15px;
-            background: #161b22;
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            padding: 10px 14px;
-            font-size: 12px;
-            color: var(--text-secondary);
-        }
-        .stats-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            text-align: center;
-            gap: 6px;
-            margin-top: 4px;
-        }
-        .stats-item span {
-            display: block;
-            font-size: 13.5px;
-            font-weight: 700;
-            color: var(--text-primary);
-        }
+        .actions { margin-top: 20px; }
 
-        .actions { margin-top: 18px; }
-
-        button.btn-primary { 
+        button { 
             width: 100%;
             padding: 14px; 
             background-color: var(--primary-blue); 
             color: white; 
             border: none; 
-            border-radius: 8px; 
-            font-size: 15.5px;
-            font-weight: 600;
+            border-radius: 6px; 
+            font-size: 16px;
+            font-weight: bold;
             cursor: pointer;
-            transition: all 0.2s ease;
         }
 
-        button.btn-primary:hover:not(:disabled) { background-color: var(--hover-blue); }
-        button.btn-primary:disabled { background-color: #21262d; color: #484f58; cursor: not-allowed; opacity: 0.8; }
-        
-        .status-msg {
-            margin-top: 12px;
-            text-align: center;
-            font-size: 12px;
-            color: var(--text-secondary);
-            min-height: 18px;
-        }
+        button:disabled { background-color: #333; color: #666; cursor: not-allowed; }
     </style>
 </head>
 <body>
 
     <div class="main-container">
-        <h2 class="header-title">Cloudflare JS 混淆加固工具</h2>
-        <p class="header-subtitle">专为 Workers / Pages 打造的高性能多维代码防护平台</p>
+        <h2>Cloudflare JS 混淆工具</h2>
         
-        <!-- 混淆防护模式切换 -->
-        <div class="mode-selector">
-            <button class="mode-btn active" data-mode="compat" onclick="selectMode('compat')">
-                <span>⚡ 极速兼容</span>
-            </button>
-            <button class="mode-btn" data-mode="deep" onclick="selectMode('deep')">
-                <span>🛡️ 深度高防</span>
-            </button>
-            <button class="mode-btn" data-mode="secondary" onclick="selectMode('secondary')">
-                <span>🔄 二次叠混</span>
-            </button>
-        </div>
-
-        <div id="mode-desc" class="mode-desc">
-            <strong>⚡ 极速高兼容模式</strong>：100% 杜绝 CPU 超时，优化变量与字符串剥离，专为 VLESS、Trojan 等 TCP 代理及高并发 Worker 打造。
-        </div>
-
         <div id="drop-zone">
             <div id="dz-prompt">
                 <div class="dz-icon">📄</div>
-                <div class="dz-text">点击这里选择 或 直接拖入 .js 源码文件<br><span style="font-size:12px;color:#7d8590;">支持原生 JS 及已混淆的 Worker 文件</span></div>
+                <div class="dz-text">点击这里选择 或 直接拖入 .js明文源码文件</div>
             </div>
             
             <div id="file-info">
-                <div class="dz-icon">✅</div>
+                <div class="dz-icon">📄</div>
                 <div id="filename-text"></div>
-                <div id="filesize-text"></div>
             </div>
         </div>
         
-        <input type="file" id="file-input" accept=".js,.txt" style="display: none;">
-
-        <div id="stats-box" class="stats-box">
-            <div class="stats-grid">
-                <div class="stats-item">原文件大小<span id="stat-orig">-</span></div>
-                <div class="stats-item">混淆后大小<span id="stat-obf">-</span></div>
-                <div class="stats-item">加固耗时<span id="stat-time">-</span></div>
-            </div>
-        </div>
+        <input type="file" id="file-input" accept=".js" style="display: none;">
 
         <div class="actions">
-            <button id="process-btn" class="btn-primary" disabled>开始混淆并下载</button>
+            <button id="process-btn" disabled>开始混淆并下载</button>
         </div>
-        <div id="status-msg" class="status-msg"></div>
     </div>
 
     <script>
@@ -255,29 +120,9 @@
         const dzPrompt = document.getElementById("dz-prompt");
         const fileInfo = document.getElementById("file-info");
         const filenameText = document.getElementById("filename-text");
-        const filesizeText = document.getElementById("filesize-text");
         const fileInput = document.getElementById("file-input");
         const processBtn = document.getElementById("process-btn");
-        const statusMsg = document.getElementById("status-msg");
-        const modeDesc = document.getElementById("mode-desc");
-        const statsBox = document.getElementById("stats-box");
-
         let selectedFile = null;
-        let currentMode = "compat";
-
-        const modeDescriptions = {
-            compat: "<strong>⚡ 极速高兼容模式</strong>：100% 杜绝 CPU 超时，局部变量重命名与字符串阵列化，完美兼容全部 VLESS/Trojan 代理及高并发 Worker。",
-            deep: "<strong>🛡️ 深度高防模式</strong>：开启 <strong>Base64/RC4 动态密文字符串加密</strong>与<strong>安全控制流平坦化状态机</strong>，代码不可直接逆向，严密防护私有密钥。",
-            secondary: "<strong>🔄 二次叠加混淆模式</strong>：专为已混淆脚本定制！生成独立随机前缀命名空间，关闭 AST 破坏性化简，杜绝多层混淆命名冲突与崩溃。"
-        };
-
-        function selectMode(mode) {
-            currentMode = mode;
-            document.querySelectorAll(".mode-btn").forEach(btn => {
-                btn.classList.toggle("active", btn.dataset.mode === mode);
-            });
-            modeDesc.innerHTML = modeDescriptions[mode];
-        }
 
         // 拖拽逻辑
         ["dragenter", "dragover", "dragleave", "drop"].forEach(name => {
@@ -290,161 +135,109 @@
         dropZone.onclick = () => fileInput.click();
         fileInput.onchange = e => handleFiles(e.target.files);
 
-        function formatBytes(bytes) {
-            if (bytes === 0) return "0 B";
-            const k = 1024;
-            const sizes = ["B", "KB", "MB"];
-            const i = Math.floor(Math.log(bytes) / Math.log(k));
-            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
-        }
-
         function handleFiles(files) {
-            if (files.length > 0) {
+            if (files.length > 0 && files[0].name.endsWith(".js")) {
                 selectedFile = files[0];
                 dzPrompt.style.display = "none";
                 fileInfo.style.display = "block";
                 filenameText.innerText = selectedFile.name;
-                filesizeText.innerText = formatBytes(selectedFile.size);
                 processBtn.disabled = false;
                 dropZone.style.borderColor = "var(--primary-blue)";
-                statusMsg.innerText = "文件已就绪，选择上方模式后点击混淆";
-                statusMsg.style.color = "var(--text-secondary)";
             }
-        }
-
-        function buildConfig(mode) {
-            const uniquePrefix = "_0x" + Math.random().toString(36).substring(2, 6) + "_";
-            
-            // Cloudflare Workers 核心保留关键字
-            const cfReserved = [
-                "^self$", "^postMessage$", "^onmessage$", "^close$",
-                "^addEventListener$", "^removeEventListener$", "^dispatchEvent$",
-                "^fetch$", "^Request$", "^Response$", "^Headers$", "^FormData$",
-                "^crypto$", "^subtle$", "^SubtleCrypto$",
-                "^performance$", "^Date$", "^setTimeout$", "^clearTimeout$",
-                "^setInterval$", "^clearInterval$", "^queueMicrotask$", "^structuredClone$",
-                "^console$", "^debugger$",
-                "^env$", "^ctx$", "^context$", "^request$", "^response$",
-                "^import\\.meta$", "^import\\.meta\\.url$",
-                "^export$", "^default$", "^connect$",                   // CF TCP 代理 Sockets (cloudflare:sockets)
-                "^WebSocket$", "^WebSocketPair$", "^HTMLRewriter$",     // Worker 原生特有 API
-                "^caches$", "^ReadableStream$", "^WritableStream$", "^TransformStream$",
-                "^ByteLengthQueuingStrategy$", "^CountQueuingStrategy$",
-                "^TextEncoder$", "^TextDecoder$", "^URL$", "^URLSearchParams$",
-                "^atob$", "^btoa$", "^importScripts$"
-            ];
-
-            let cfg = {
-                compact: true,
-                sourceMap: false,
-                target: "browser",
-                renameGlobals: false,
-                renameProperties: false,
-                renamePropertiesMode: "safe",
-                identifierNamesGenerator: "mangled-shuffled",
-                identifierNamesCache: null,
-                identifiersPrefix: uniquePrefix,
-                reservedNames: cfReserved,
-                splitStrings: false,
-                unicodeEscapeSequence: false,
-                numbersToExpressions: false,
-                transformObjectKeys: false,
-                selfDefending: false,
-                debugProtection: false,
-                debugProtectionInterval: 0,
-                disableConsoleOutput: false,
-                domainLock: [],
-                ignoreImports: true
-            };
-
-            if (mode === "deep") {
-                // 【深度高防模式】
-                cfg = Object.assign(cfg, {
-                    controlFlowFlattening: true,
-                    controlFlowFlatteningThreshold: 0.25, // 控制在安全阈值，防止 Worker CPU 超时
-                    deadCodeInjection: false,
-                    simplify: false,
-                    stringArray: true,
-                    stringArrayEncoding: ["rc4"],        // RC4 动态密文加密！彻底消除明文字符串
-                    stringArrayThreshold: 0.9,
-                    stringArrayRotate: true,
-                    stringArrayShuffle: true,
-                    stringArrayWrappersCount: 2,
-                    stringArrayWrappersType: "variable",
-                    stringArrayWrappersChainedCalls: true,
-                    stringArrayWrappersParametersMaxCount: 2,
-                    stringArrayCallsTransform: false
-                });
-            } else if (mode === "secondary") {
-                // 【二次叠混模式】
-                cfg = Object.assign(cfg, {
-                    controlFlowFlattening: false,
-                    controlFlowFlatteningThreshold: 0,
-                    deadCodeInjection: false,
-                    simplify: false,                      // 绝不化简已有混淆 AST
-                    stringArray: true,
-                    stringArrayEncoding: ["none"],
-                    stringArrayThreshold: 0.8,
-                    stringArrayRotate: false,
-                    stringArrayShuffle: true,
-                    stringArrayWrappersCount: 1,
-                    stringArrayWrappersType: "variable",
-                    stringArrayWrappersChainedCalls: false,
-                    stringArrayWrappersParametersMaxCount: 2,
-                    stringArrayCallsTransform: false
-                });
-            } else {
-                // 【极速高兼容模式】(默认)
-                cfg = Object.assign(cfg, {
-                    controlFlowFlattening: false,
-                    controlFlowFlatteningThreshold: 0,
-                    deadCodeInjection: false,
-                    simplify: false,
-                    stringArray: true,
-                    stringArrayEncoding: ["none"],
-                    stringArrayThreshold: 0.8,
-                    stringArrayRotate: false,
-                    stringArrayShuffle: true,
-                    stringArrayWrappersCount: 1,
-                    stringArrayWrappersType: "variable",
-                    stringArrayWrappersChainedCalls: false,
-                    stringArrayWrappersParametersMaxCount: 2,
-                    stringArrayCallsTransform: false
-                });
-            }
-
-            return cfg;
         }
         
         processBtn.onclick = () => {
             if (!selectedFile) return;
             
             processBtn.disabled = true;
-            processBtn.innerText = "混淆处理中...";
-            statusMsg.innerText = "正在按照 [" + currentMode + "] 模式进行 AST 分析与多态混淆...";
-            statusMsg.style.color = "var(--primary-blue)";
+            processBtn.innerText = "混淆中...";
         
             const reader = new FileReader();
-            const startTime = performance.now();
         
             reader.onload = async (e) => {
                 try {
+                    const config = {
+                        // ==================== 基础输出配置 ====================
+                        compact: true,                          // 压缩代码至一行，减少体积，提升 Worker 加载速度
+                        sourceMap: false,                       // 关闭 source map，生产环境不需要，避免暴露原始代码结构
+                        target: "browser",                      // 输出目标为浏览器环境，适配 Cloudflare Workers 的 V8 引擎
+                        
+                        // ==================== 控制流保护（完全禁用，避免 CPU 超时） ====================
+                        controlFlowFlattening: false,           // 禁用控制流扁平化，Workers 中复杂的控制流转换会导致 CPU 时间超限
+                        controlFlowFlatteningThreshold: 0,      // 扁平化概率设为 0，与上一项配合完全禁用该功能
+                        deadCodeInjection: false,               // 禁用死代码注入，保持代码轻量，减少 Worker 内存占用
+                        simplify: false,                        // 【关键修正】设为 false，确保对已混淆过的脚本能再次混淆，防止 AST 化简误伤代码或造成过度压缩
+                        
+                        // ==================== 变量名混淆配置 ====================
+                        renameGlobals: false,                   // 禁用全局变量混淆，防止 Worker 核心对象（self、postMessage 等）被重命名导致崩溃
+                        identifierNamesGenerator: "mangled-shuffled", // 生成极短且随机的局部变量名（如 a、b、c），优化体积
+                        identifierNamesCache: null,             // 不使用变量名缓存，每次混淆生成全新命名，增加逆向难度
+                        identifiersPrefix: "",                  // 原生命名格式
+                        
+                        // 全局保留字列表（保护 Worker 环境必需的关键标识符，特别加入 connect、export、default 兼容 sockets 代理）
+                        reservedNames: [
+                            "^self$", "^postMessage$", "^onmessage$", "^close$",
+                            "^addEventListener$", "^removeEventListener$",
+                            "^fetch$", "^Request$", "^Response$", "^Headers$",
+                            "^crypto$", "^subtle$",
+                            "^performance$", "^Date$", "^setTimeout$", "^clearTimeout$",
+                            "^setInterval$", "^clearInterval$",
+                            "^console$", "^debugger$",
+                            "^env$", "^ctx$", "^context$", "^request$",
+                            "^import\\.meta$", "^import\\.meta\\.url$",
+                            "^connect$", "^export$", "^default$", "^WebSocket$", "^HTMLRewriter$"
+                        ],
+                        
+                        // ==================== 属性名混淆（完全禁用，确保 API 调用安全） ====================
+                        renameProperties: false,                // 严格禁用属性名混淆，确保对象属性访问、JSON 解析、API 调用 100% 正常
+                        renamePropertiesMode: "safe",           // 安全模式重命名属性
+                        
+                        // ==================== 字符串深度保护（优化版，平衡安全与兼容性） ====================
+                        stringArray: true,                      // 开启全局字符串阵列，将所有字符串提取到统一数组
+                        stringArrayEncoding: ["none"],          // 禁用编码，使用 none 避免运行时解码开销
+                        stringArrayThreshold: 0.8,              // 80% 字符串进入阵列，保留 20% 原始字符串确保兼容性
+                        stringArrayRotate: false,               // 禁用数组旋转，避免字符串访问时的复杂变换
+                        stringArrayShuffle: true,               // 随机打乱字符串数组顺序，让静态分析无法直接匹配字符串
+                        stringArrayWrappersCount: 1,            // 使用 1 层包装函数，减少函数调用栈深度，提升执行效率
+                        stringArrayWrappersType: "variable",    // 使用变量类型包装器，比 function 类型性能更好
+                        stringArrayWrappersChainedCalls: false, // 禁用包装函数的链式调用，避免运行时错误
+                        stringArrayWrappersParametersMaxCount: 2, // 包装函数最多 2 个参数，平衡防护强度和性能
+                        stringArrayCallsTransform: false,       // 禁用字符串调用转换，降低运行时复杂度
+                        
+                        // ==================== 字符串拆分（完全禁用，该选项是兼容性最大隐患） ====================
+                        splitStrings: false,                    // 禁用字符串拆分，避免破坏 eval、import.meta 等动态代码
+                        splitStringsChunkLength: 5,             // 字符串拆分块长度
+                        
+                        // ==================== 字符转义配置 ====================
+                        unicodeEscapeSequence: false,           // 禁用 Unicode 转义，避免体积膨胀和正则表达式构造错误
+                        
+                        // ==================== 数字保护（追求性能，禁用） ====================
+                        numbersToExpressions: false,            // 不将数字转换为数学表达式，避免大型循环中的额外计算开销
+                        
+                        // ==================== 对象键名保护 ====================
+                        transformObjectKeys: false,             // 不转换对象键名，确保对象结构可预测
+                        
+                        // ==================== 自保护和反调试（Worker 环境下必须禁用） ====================
+                        selfDefending: false,                   // 禁用自我防御，Worker 环境中开启该选项极易导致运行时错误
+                        debugProtection: false,                 // 禁用反调试保护，不影响正常执行
+                        debugProtectionInterval: 0,             // 反调试检查间隔设为 0
+                        
+                        // ==================== 控制台输出 ====================
+                        disableConsoleOutput: false,            // 保留 console 输出，许多库依赖 console 进行状态检测和调试
+                        
+                        // ==================== 其他配置 ====================
+                        domainLock: [],                         // 不锁定域名，保持部署灵活性，Worker 可跨域名使用
+                        ignoreImports: true                     // 忽略 import 语句，直接处理 ES6 模块导入，避免解析错误
+                    };
+        
                     if (typeof JavaScriptObfuscator === "undefined") {
-                        throw new Error("混淆核心库未能及时加载，请刷新页面后重试");
+                        throw new Error("JavaScriptObfuscator 库未加载，请刷新页面后重试");
                     }
         
-                    const config = buildConfig(currentMode);
                     const obfuscationResult = JavaScriptObfuscator.obfuscate(e.target.result, config);
                     const obfuscatedCode = obfuscationResult.getObfuscatedCode();
-                    const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
         
-                    // 显示统计
-                    statsBox.style.display = "block";
-                    document.getElementById("stat-orig").innerText = formatBytes(selectedFile.size);
-                    document.getElementById("stat-obf").innerText = formatBytes(obfuscatedCode.length);
-                    document.getElementById("stat-time").innerText = elapsed + "s";
-
-                    // 构造下载
+                    // 下载处理
                     const blob = new Blob([obfuscatedCode], { type: "application/javascript;charset=utf-8" });
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement("a");
@@ -460,17 +253,13 @@
                         window.URL.revokeObjectURL(url);
                         processBtn.disabled = false;
                         processBtn.innerText = "开始混淆并下载";
-                        statusMsg.innerText = "🎉 混淆完成！已自动下载 _worker.js (" + elapsed + "s)";
-                        statusMsg.style.color = "var(--success-color)";
-                    }, 200);
+                    }, 100);
         
                 } catch (err) {
                     console.error(err);
                     alert("混淆失败: " + err.message);
                     processBtn.disabled = false;
                     processBtn.innerText = "开始混淆并下载";
-                    statusMsg.innerText = "❌ 混淆出错: " + err.message;
-                    statusMsg.style.color = "#ff5252";
                 }
             };
             reader.readAsText(selectedFile);
