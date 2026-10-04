@@ -1,56 +1,57 @@
 // Cloudflare Worker: cf-js-obfuscator
 // 托管纯前端 JS 混淆工具，支持二次混淆与原生 Cloudflare Workers 脚本防护
 
-const HTML_CONTENT = `${html.replace(/\\/g, "\\\\").replace(/\`/g, "\\\`").replace(/\\$/g, "\\\$")}`;
+const HTML_CONTENT = "<!DOCTYPE html>\n<html lang=\"zh-CN\">\n<head>\n    <meta charset=\"UTF-8\">\n    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no\">\n    <title>Cloudflare JS混淆工具</title>\n    <!-- 多重容灾加载混淆器核心库 -->\n    <script src=\"/index.browser.js\" onerror=\"loadFallbackCDN(this)\"></script>\n    <script>\n        function loadFallbackCDN(el) {\n            console.warn(\"Local Worker JS load failed, trying cdnjs...\");\n            const s1 = document.createElement(\"script\");\n            s1.src = \"https://cdnjs.cloudflare.com/ajax/libs/javascript-obfuscator/4.1.1/index.browser.js\";\n            s1.onerror = function() {\n                console.warn(\"cdnjs failed, trying jsdelivr...\");\n                const s2 = document.createElement(\"script\");\n                s2.src = \"https://cdn.jsdelivr.net/npm/javascript-obfuscator@4.1.1/dist/index.browser.js\";\n                document.head.appendChild(s2);\n            };\n            document.head.appendChild(s1);\n        }\n    </script>\n    <style>\n        :root {\n            --bg-color: #121212;\n            --container-bg: #1e1e1e;\n            --text-primary: #e0e0e0;\n            --border-color: #333333;\n            --primary-blue: #2196f3;\n            --hover-blue: #1976d2;\n            --success-color: #4caf50;\n        }\n\n        * { box-sizing: border-box; margin: 0; padding: 0; }\n\n        body { \n            font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;\n            background-color: var(--bg-color); \n            color: var(--text-primary); \n            display: flex;\n            align-items: center;\n            justify-content: center;\n            min-height: 100vh;\n            padding: 15px;\n        }\n\n        .main-container {\n            width: 100%;\n            max-width: 500px;\n            background-color: var(--container-bg);\n            padding: 28px 24px;\n            border-radius: 12px;\n            border: 1px solid var(--border-color);\n            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);\n        }\n\n        h2 { \n            text-align: center; \n            margin-bottom: 22px; \n            font-size: 1.45rem; \n            font-weight: 600;\n            letter-spacing: 0.5px;\n        }\n\n        #drop-zone { \n            border: 2px dashed var(--border-color); \n            padding: 42px 16px;\n            text-align: center; \n            cursor: pointer; \n            background-color: rgba(255, 255, 255, 0.02);\n            border-radius: 8px;\n            min-height: 160px;\n            display: flex;\n            flex-direction: column;\n            align-items: center;\n            justify-content: center;\n            transition: all 0.25s ease;\n        }\n\n        #drop-zone:hover, #drop-zone.dragover { \n            border-color: var(--primary-blue); \n            background-color: rgba(33, 150, 243, 0.06); \n        }\n\n        .dz-icon { font-size: 34px; margin-bottom: 12px; }\n        .dz-text { color: #8c8c8c; font-size: 14px; line-height: 1.5; }\n\n        #file-info { display: none; text-align: center; width: 100%; }\n        #filename-text { color: var(--primary-blue); font-weight: 600; font-size: 15px; margin-top: 8px; word-break: break-all; }\n        #filesize-text { color: #777; font-size: 12px; margin-top: 4px; }\n\n        .feature-tags {\n            display: flex;\n            justify-content: center;\n            gap: 8px;\n            margin: 18px 0 10px 0;\n            flex-wrap: wrap;\n        }\n        .tag {\n            font-size: 11px;\n            background: rgba(255, 255, 255, 0.05);\n            color: #999;\n            padding: 3px 8px;\n            border-radius: 4px;\n            border: 1px solid #2e2e2e;\n        }\n\n        .actions { margin-top: 15px; }\n\n        button { \n            width: 100%;\n            padding: 14px; \n            background-color: var(--primary-blue); \n            color: white; \n            border: none; \n            border-radius: 6px; \n            font-size: 16px;\n            font-weight: 600;\n            cursor: pointer;\n            transition: background-color 0.2s ease, opacity 0.2s ease;\n        }\n\n        button:hover:not(:disabled) { background-color: var(--hover-blue); }\n        button:disabled { background-color: #333333; color: #666666; cursor: not-allowed; opacity: 0.7; }\n        \n        .status-msg {\n            margin-top: 12px;\n            text-align: center;\n            font-size: 12px;\n            color: #777;\n            min-height: 18px;\n        }\n    </style>\n</head>\n<body>\n\n    <div class=\"main-container\">\n        <h2>Cloudflare JS 混淆工具</h2>\n        \n        <div id=\"drop-zone\">\n            <div id=\"dz-prompt\">\n                <div class=\"dz-icon\">📄</div>\n                <div class=\"dz-text\">点击这里选择 或 直接拖入 .js 源码文件<br><span style=\"font-size:12px;color:#888;\">(支持原码混淆 与 已混淆脚本二次叠加混淆)</span></div>\n            </div>\n            \n            <div id=\"file-info\">\n                <div class=\"dz-icon\">✅</div>\n                <div id=\"filename-text\"></div>\n                <div id=\"filesize-text\"></div>\n            </div>\n        </div>\n        \n        <input type=\"file\" id=\"file-input\" accept=\".js,.txt\" style=\"display: none;\">\n\n        <div class=\"feature-tags\">\n            <span class=\"tag\">⚡ 零服务端存储</span>\n            <span class=\"tag\">🛡️ 支持二次混淆</span>\n            <span class=\"tag\">☁️ 100% 适配 CF Worker</span>\n        </div>\n\n        <div class=\"actions\">\n            <button id=\"process-btn\" disabled>开始混淆并下载</button>\n        </div>\n        <div id=\"status-msg\" class=\"status-msg\"></div>\n    </div>\n\n    <script>\n        const dropZone = document.getElementById(\"drop-zone\");\n        const dzPrompt = document.getElementById(\"dz-prompt\");\n        const fileInfo = document.getElementById(\"file-info\");\n        const filenameText = document.getElementById(\"filename-text\");\n        const filesizeText = document.getElementById(\"filesize-text\");\n        const fileInput = document.getElementById(\"file-input\");\n        const processBtn = document.getElementById(\"process-btn\");\n        const statusMsg = document.getElementById(\"status-msg\");\n        let selectedFile = null;\n\n        // 拖拽逻辑\n        [\"dragenter\", \"dragover\", \"dragleave\", \"drop\"].forEach(name => {\n            dropZone.addEventListener(name, e => { e.preventDefault(); e.stopPropagation(); });\n        });\n\n        dropZone.addEventListener(\"dragover\", () => dropZone.classList.add(\"dragover\"));\n        [\"dragleave\", \"drop\"].forEach(name => dropZone.addEventListener(name, () => dropZone.classList.remove(\"dragover\")));\n        dropZone.addEventListener(\"drop\", e => handleFiles(e.dataTransfer.files));\n        dropZone.onclick = () => fileInput.click();\n        fileInput.onchange = e => handleFiles(e.target.files);\n\n        function formatBytes(bytes) {\n            if (bytes === 0) return \"0 B\";\n            const k = 1024;\n            const sizes = [\"B\", \"KB\", \"MB\"];\n            const i = Math.floor(Math.log(bytes) / Math.log(k));\n            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + \" \" + sizes[i];\n        }\n\n        function handleFiles(files) {\n            if (files.length > 0) {\n                selectedFile = files[0];\n                dzPrompt.style.display = \"none\";\n                fileInfo.style.display = \"block\";\n                filenameText.innerText = selectedFile.name;\n                filesizeText.innerText = formatBytes(selectedFile.size);\n                processBtn.disabled = false;\n                dropZone.style.borderColor = \"var(--primary-blue)\";\n                statusMsg.innerText = \"文件已就绪，点击上方按钮开始混淆\";\n                statusMsg.style.color = \"#888\";\n            }\n        }\n        \n        processBtn.onclick = () => {\n            if (!selectedFile) return;\n            \n            processBtn.disabled = true;\n            processBtn.innerText = \"混淆处理中...\";\n            statusMsg.innerText = \"正在执行 AST 分析与安全混淆...\";\n        \n            const reader = new FileReader();\n        \n            reader.onload = async (e) => {\n                try {\n                    // 每次混淆生成独一无二的随机标识符前缀，避免对已混淆代码进行二次混淆时的命名空间冲突\n                    const uniquePrefix = \"_0x\" + Math.random().toString(36).substring(2, 6) + \"_\";\n\n                    const config = {\n                        // ==================== 基础输出配置 ====================\n                        compact: true,                          // 压缩代码至一行，减少体积，提升 Worker 加载速度\n                        sourceMap: false,                       // 关闭 source map，生产环境不需要\n                        target: \"browser\",                      // 输出目标为浏览器环境，适配 Cloudflare Workers 的 V8 引擎\n                        \n                        // ==================== 控制流保护（完全禁用，避免 CPU 超时） ====================\n                        controlFlowFlattening: false,           // 禁用控制流扁平化，Workers 中复杂的控制流转换会导致 CPU 时间超限\n                        controlFlowFlatteningThreshold: 0,      // 扁平化概率设为 0\n                        deadCodeInjection: false,               // 禁用死代码注入，保持代码轻量，减少 Worker 内存占用\n                        simplify: false,                        // 【重要】二次混淆时必须禁用简化，避免破坏已混淆 AST 和函数调用\n                        \n                        // ==================== 变量名混淆配置 ====================\n                        renameGlobals: false,                   // 禁用全局变量混淆，防止 Worker 核心对象被重命名导致崩溃\n                        identifierNamesGenerator: \"mangled-shuffled\", // 生成极短且随机的局部变量名（如 a、b、c），优化体积\n                        identifierNamesCache: null,             // 不使用变量名缓存\n                        identifiersPrefix: uniquePrefix,        // 【重要】动态前缀隔离，彻底支持多次/二次叠加混淆不冲突\n                        \n                        // 全局保留字列表：全面覆盖 Cloudflare Workers 核心 API 与模块规范\n                        reservedNames: [\n                            \"^self$\", \"^postMessage$\", \"^onmessage$\", \"^close$\",\n                            \"^addEventListener$\", \"^removeEventListener$\", \"^dispatchEvent$\",\n                            \"^fetch$\", \"^Request$\", \"^Response$\", \"^Headers$\", \"^FormData$\",\n                            \"^crypto$\", \"^subtle$\", \"^SubtleCrypto$\",\n                            \"^performance$\", \"^Date$\", \"^setTimeout$\", \"^clearTimeout$\",\n                            \"^setInterval$\", \"^clearInterval$\", \"^queueMicrotask$\", \"^structuredClone$\",\n                            \"^console$\", \"^debugger$\",\n                            \"^env$\", \"^ctx$\", \"^context$\", \"^request$\", \"^response$\",\n                            \"^import\\\\.meta$\", \"^import\\\\.meta\\\\.url$\",\n                            \"^export$\", \"^default$\", \"^connect$\",                   // CF TCP 代理 sockets (cloudflare:sockets)\n                            \"^WebSocket$\", \"^WebSocketPair$\", \"^HTMLRewriter$\",     // Worker 原生特有 API\n                            \"^caches$\", \"^ReadableStream$\", \"^WritableStream$\", \"^TransformStream$\",\n                            \"^ByteLengthQueuingStrategy$\", \"^CountQueuingStrategy$\",\n                            \"^TextEncoder$\", \"^TextDecoder$\", \"^URL$\", \"^URLSearchParams$\",\n                            \"^atob$\", \"^btoa$\", \"^importScripts$\"\n                        ],\n                        \n                        // ==================== 属性名混淆（严格禁用，确保 API 调用安全） ====================\n                        renameProperties: false,                // 严格禁用属性名混淆，确保对象属性访问、JSON 解析、API 调用 100% 正常\n                        renamePropertiesMode: \"safe\",\n                        \n                        // ==================== 字符串深度保护（优化版，平衡安全与兼容性） ====================\n                        stringArray: true,                      // 开启全局字符串阵列，将所有字符串提取到统一数组\n                        stringArrayEncoding: [\"none\"],          // 禁用动态解码，降低 Worker 内存和 CPU 运行开销\n                        stringArrayThreshold: 0.8,              // 80% 字符串抽离\n                        stringArrayRotate: false,               // 禁用自执行数组滚动，避免重复混淆时死循环\n                        stringArrayShuffle: true,               // 随机打乱字符串数组顺序，让静态分析无法直接匹配字符串\n                        stringArrayWrappersCount: 1,            // 使用 1 层包装函数\n                        stringArrayWrappersType: \"variable\",    // 使用变量类型包装器，比 function 类型性能更好\n                        stringArrayWrappersChainedCalls: false, // 禁用包装函数的链式调用\n                        stringArrayWrappersParametersMaxCount: 2,\n                        stringArrayCallsTransform: false,       // 禁用字符串调用转换，降低运行时复杂度\n                        \n                        // ==================== 兼容性关键设置 ====================\n                        splitStrings: false,                    // 禁用字符串拆分，避免破坏 eval、import.meta 等动态代码\n                        splitStringsChunkLength: 5,\n                        unicodeEscapeSequence: false,           // 禁用 Unicode 转义，避免体积膨胀和正则表达式构造错误\n                        numbersToExpressions: false,            // 禁用数字转换为数学表达式，提升 Worker 运行速度\n                        transformObjectKeys: false,             // 不转换对象键名，确保对象结构可预测\n                        selfDefending: false,                   // 禁用自我防御，Worker 环境中开启该选项极易导致运行时错误\n                        debugProtection: false,                 // 禁用反调试保护，不影响正常执行\n                        debugProtectionInterval: 0,\n                        disableConsoleOutput: false,            // 保留 console 输出用于状态检测和调试\n                        domainLock: [],                         // 不锁定域名，保持部署灵活性\n                        ignoreImports: true                     // 保护 ES 模块导入导出语法 (import/export)\n                    };\n        \n                    if (typeof JavaScriptObfuscator === \"undefined\") {\n                        throw new Error(\"混淆核心库未能及时加载，请刷新页面后重试\");\n                    }\n        \n                    const obfuscationResult = JavaScriptObfuscator.obfuscate(e.target.result, config);\n                    const obfuscatedCode = obfuscationResult.getObfuscatedCode();\n        \n                    // 下载处理\n                    const blob = new Blob([obfuscatedCode], { type: \"application/javascript;charset=utf-8\" });\n                    const url = window.URL.createObjectURL(blob);\n                    const a = document.createElement(\"a\");\n                    a.style.display = \"none\";\n                    a.href = url;\n                    a.download = \"_worker.js\";\n                    \n                    document.body.appendChild(a);\n                    a.click();\n                    \n                    setTimeout(() => {\n                        document.body.removeChild(a);\n                        window.URL.revokeObjectURL(url);\n                        processBtn.disabled = false;\n                        processBtn.innerText = \"开始混淆并下载\";\n                        statusMsg.innerText = \"🎉 混淆完成并已自动开始下载 _worker.js\";\n                        statusMsg.style.color = \"var(--success-color)\";\n                    }, 200);\n        \n                } catch (err) {\n                    console.error(err);\n                    alert(\"混淆失败: \" + err.message);\n                    processBtn.disabled = false;\n                    processBtn.innerText = \"开始混淆并下载\";\n                    statusMsg.innerText = \"❌ 混淆出错: \" + err.message;\n                    statusMsg.style.color = \"#ff5252\";\n                }\n            };\n            reader.readAsText(selectedFile);\n        };        \n    </script>\n</body>\n</html>";
 
-export default {
-  async fetch(request, env, ctx) {
-    const url = new URL(request.url);
+addEventListener("fetch", event => {
+  event.respondWith(handleRequest(event.request, event));
+});
 
-    // 路由 1: 静态资源代理与分发 (index.browser.js)
-    if (url.pathname === "/index.browser.js") {
-      const cdnUrl = "https://cdnjs.cloudflare.com/ajax/libs/javascript-obfuscator/4.1.1/index.browser.js";
-      
-      const cache = caches.default;
-      let response = await cache.match(request);
-      if (!response) {
-        try {
-          const fetchResp = await fetch(cdnUrl, {
+async function handleRequest(request, event) {
+  const url = new URL(request.url);
+
+  // 路由 1: 静态资源代理与分发 (index.browser.js)
+  if (url.pathname === "/index.browser.js") {
+    const cdnUrl = "https://cdnjs.cloudflare.com/ajax/libs/javascript-obfuscator/4.1.1/index.browser.js";
+    const cache = caches.default;
+    let response = await cache.match(request);
+    if (!response) {
+      try {
+        const fetchResp = await fetch(cdnUrl, {
+          headers: {
+            "User-Agent": request.headers.get("User-Agent") || "Mozilla/5.0"
+          }
+        });
+        if (fetchResp.ok) {
+          response = new Response(fetchResp.body, {
             headers: {
-              "User-Agent": request.headers.get("User-Agent") || "Mozilla/5.0"
+              "content-type": "application/javascript; charset=utf-8",
+              "cache-control": "public, max-age=604800, immutable",
+              "access-control-allow-origin": "*"
             }
           });
-          if (fetchResp.ok) {
-            response = new Response(fetchResp.body, {
-              headers: {
-                "content-type": "application/javascript; charset=utf-8",
-                "cache-control": "public, max-age=604800, immutable",
-                "access-control-allow-origin": "*"
-              }
-            });
-            ctx.waitUntil(cache.put(request, response.clone()));
-          } else {
-            return Response.redirect(cdnUrl, 302);
-          }
-        } catch (e) {
+          event.waitUntil(cache.put(request, response.clone()));
+        } else {
           return Response.redirect(cdnUrl, 302);
         }
+      } catch (e) {
+        return Response.redirect(cdnUrl, 302);
       }
-      return response;
     }
-
-    // 路由 2: 健康检查
-    if (url.pathname === "/healthz" || url.pathname === "/ping") {
-      return new Response("OK", { status: 200 });
-    }
-
-    // 路由 3: 默认展示混淆工具网页
-    return new Response(HTML_CONTENT, {
-      headers: {
-        "content-type": "text/html; charset=utf-8",
-        "cache-control": "public, max-age=3600",
-        "x-content-type-options": "nosniff"
-      }
-    });
+    return response;
   }
-};
+
+  // 路由 2: 健康检查
+  if (url.pathname === "/healthz" || url.pathname === "/ping") {
+    return new Response("OK", { status: 200 });
+  }
+
+  // 路由 3: 默认展示混淆工具网页
+  return new Response(HTML_CONTENT, {
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "public, max-age=3600",
+      "x-content-type-options": "nosniff"
+    }
+  });
+}
