@@ -391,7 +391,7 @@
             <label class="mode-option active" id="label-mode-armor" onclick="selectObfMode('armor')">
                 <input type="radio" name="obf-mode" id="mode-armor" value="armor" class="mode-radio" checked>
                 <div class="mode-info">
-                    <h4>深度装甲混淆 <span class="mode-tag">cfnew 强化</span></h4>
+                    <h4>深度装甲混淆 <span class="mode-tag">高强度安全推荐</span></h4>
                     <p>Base64 动态加解密 + 字符串切片 + Unicode 转义 + 保护 CF Workers 运行时全系标准 API</p>
                 </div>
             </label>
@@ -721,7 +721,7 @@
                     let config;
 
                     if (currentObfMode === "armor") {
-                        // ==================== 方案 A: 深度装甲模式 (byJoey/cfnew 强化) ====================
+                        // ==================== 方案 A: 深度装甲模式 (全量字符串 Base64 编码与深度切片) ====================
                         config = {
                             compact: true,
                             sourceMap: false,
