@@ -725,6 +725,10 @@
                 translation: "执行客户端请求的路由分发与逻辑处理"
             },
             {
+                pattern: /handle incoming request/i,
+                translation: "处理接入的外部网络请求报文"
+            },
+            {
                 pattern: /websocket connection/i,
                 translation: "建立与维护 WebSocket 双向实时数据通道"
             },
@@ -733,7 +737,7 @@
                 translation: "Cloudflare Worker 边缘节点脚本"
             },
             {
-                pattern: /cloudflare pages/i,
+                pattern: /cloudflare pages functions?/i,
                 translation: "Cloudflare Pages 静态托管与边缘函数服务"
             },
             {
@@ -755,8 +759,43 @@
             {
                 pattern: /error handling/i,
                 translation: "执行安全容错拦截与异常恢复逻辑"
-            }
-        ];
+            },
+            {
+                pattern: /parse url query parameters/i,
+                translation: "解析 URL 请求路径中的 Query 查询参数"
+            },
+            {
+                pattern: /check authorization token/i,
+                translation: "校验请求头中的身份授权与访问令牌"
+            },
+            {
+                pattern: /generate unique request id/i,
+                translation: "生成全链路追踪的唯一定位请求 ID"
+            },
+            {
+                pattern: /read response body as json/i,
+                translation: "以 JSON 数据结构读取并反序列化响应报文"
+            },
+            {
+                pattern: /send response to client/i,
+                translation: "组装完成并向客户端输出 HTTP 响应报文"
+            },
+            {
+                pattern: /cache hit|cache miss/i,
+                translation: "查询边缘就近缓存命中与穿透状态"
+            },
+            {
+                pattern: /rate limit exceeded/i,
+                translation: "访问频次已触发系统全局限流防护阈值"
+            },
+            {
+                pattern: /tls handshake/i,
+                translation: "安全传输层 TLS 证书协商与安全握手"
+            },
+            {
+                pattern: /cors headers/i,
+                translation: "注入跨域资源共享（CORS）安全响应标头"
+            }];
 
         // 单词级通用词典
         const WORD_MAP = {
@@ -835,8 +874,12 @@
             { regex: /反向代理/g, repl: "流量透明中继与反向代理" },
             { regex: /优选节点|优选地址/g, repl: "智能低延迟优选链路节点" },
             { regex: /订阅链接|节点配置/g, repl: "客户端接入拓扑与订阅参数" },
-            { regex: /全局变量/g, repl: "顶级作用域共享环境对象" }
-        ];
+            { regex: /全局变量/g, repl: "顶级作用域共享环境对象" },
+            { regex: /跨域设置|跨域处理/g, repl: "放行跨源请求并附加安全标头" },
+            { regex: /时间戳/g, repl: "当前系统高精度毫秒级时间戳" },
+            { regex: /状态码/g, repl: "HTTP 协议响应状态标识码" },
+            { regex: /数据流/g, repl: "底层可读写二进制传输管道流" },
+            { regex: /请求头/g, repl: "客户端传入的协议元数据标头" }];
 
         // 判定文本是否主要为英文
         function isEnglishDominant(text) {
