@@ -1329,6 +1329,12 @@
 
         // 智能净化残损与非法字符标识符（彻底根治误粘贴、损坏编码引起的 Unexpected character 词法崩溃）
         function sanitizeDamagedCode(sourceCode) {
+            // [自愈器步骤 0]: 自动探测并修复第三方已混淆脚本中残留的裸 window 引用（解决 Uncaught ReferenceError: window is not defined 导致 Cloudflare 10021 部署校验报错）
+            let autoEnvPrefix = "";
+            if (/\bwindow\b/.test(sourceCode) && !/(?:var|let|const)\s+window\b/.test(sourceCode)) {
+                autoEnvPrefix = "var window = typeof globalThis !== 'undefined' ? globalThis : (typeof self !== 'undefined' ? self : this);\n";
+            }
+
             // 步骤 1: 预处理修复残损的 import 语句 (如 import { connect as  } 或带乱码的 connect as )
             let code = sourceCode.replace(/import\s*\{\s*connect(?:\s+as\s+([^\}]+))?\s*\}\s*from\s*(['"]cloudflare:sockets['"])/g, (match, asName, mod) => {
                 const cleanName = (asName || '').trim();
@@ -1716,7 +1722,10 @@
                         const protectedImports = extractAndProtectImports(cleanSource, CF_RESERVED_NAMES);
 
                         let config;
-                        if (currentObfMode === "armor") {
+                        // 智能识别：超大型脚本（>80KB）或已包含混淆特征的脚本（如平坦化循环 while(!![])）
+                        const isPreObfuscatedOrHuge = cleanSource.length > 80000 || /while\s*\(\s*!!\[\]\s*\)/.test(cleanSource);
+
+                        if (currentObfMode === "armor" && !isPreObfuscatedOrHuge) {
                             config = {
                                 compact: true,
                                 sourceMap: false,
@@ -1754,6 +1763,7 @@
                                 domainLock: []
                             };
                         } else {
+                            // 极致稳定混淆 / 二次混淆自适应安全配置（零运行时开销，杜绝 Cloudflare Worker CPU 超时）
                             config = {
                                 compact: true,
                                 sourceMap: false,
@@ -1770,12 +1780,12 @@
                                 renameProperties: false,
                                 renamePropertiesMode: "safe",
                                 ignoreImports: true,
-                                stringArray: true,
+                                stringArray: !isPreObfuscatedOrHuge,
                                 stringArrayEncoding: ["none"],
-                                stringArrayThreshold: 0.85,
+                                stringArrayThreshold: isPreObfuscatedOrHuge ? 0 : 0.85,
                                 stringArrayRotate: false,
-                                stringArrayShuffle: true,
-                                stringArrayWrappersCount: 1,
+                                stringArrayShuffle: false,
+                                stringArrayWrappersCount: isPreObfuscatedOrHuge ? 0 : 1,
                                 stringArrayWrappersType: "variable",
                                 stringArrayWrappersChainedCalls: false,
                                 stringArrayWrappersParametersMaxCount: 2,
@@ -1795,11 +1805,15 @@
                         const obfuscationResult = JavaScriptObfuscator.obfuscate(protectedImports.bodyCode, config);
                         const obfBody = obfuscationResult.getObfuscatedCode();
 
-                        // 重组最终代码：确保 import 原始无损置于顶层
+                        // 重组最终代码：确保 import 原始无损置于顶层，并注入 Cloudflare Workers 全局兼容垫片
+                        let finalBody = obfBody;
+                        const needsTopShim = /\bwindow\b/.test(finalBody) && !/^\s*(?:var|let|const)\s+window\b/m.test(finalBody);
+                        const topShim = needsTopShim ? "var window = typeof globalThis !== 'undefined' ? globalThis : (typeof self !== 'undefined' ? self : this);\n" : "";
+
                         if (protectedImports.importHeader) {
-                            obfuscatedCode = protectedImports.importHeader + "\n" + obfBody;
+                            obfuscatedCode = topShim + protectedImports.importHeader + "\n" + finalBody;
                         } else {
-                            obfuscatedCode = obfBody;
+                            obfuscatedCode = topShim + finalBody;
                         }
                     }
 
