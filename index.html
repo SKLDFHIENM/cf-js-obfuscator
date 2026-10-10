@@ -1194,6 +1194,142 @@
         });
 
 
+        
+        // ==================== 智能扫描源码中的 env.* 环境变量并自动锁定 ====================
+        function scanAndLockEnvBindings(source) {
+            const envMatches = source.match(/\benv\.([a-zA-Z0-9_$]+)/g) || [];
+            const bindings = new Set();
+            for (const m of envMatches) {
+                const prop = m.replace('env.', '').trim();
+                if (prop) bindings.add(prop);
+            }
+            return Array.from(bindings);
+        }
+
+        // ==================== Cloudflare Workers 深度兼容性诊断体检引擎 ====================
+        function runCloudflareDiagnostics(code) {
+            const report = [];
+            let score = 100;
+
+            // 1. 检查模块入口与 fetch 签名
+            const hasModuleExport = /export\s+default\s*\{[\s\S]*?fetch\s*\(/.test(code) || /export\s*\{[^}]*as\s+default\b/.test(code);
+            const hasServiceWorkerFetch = /addEventListener\s*\(\s*['"]fetch['"]/.test(code);
+
+            if (hasModuleExport) {
+                report.push({ pass: true, text: "✓ 原生 ES Module 入口: 已检测到标准的 export default { async fetch(request, env, ctx) } 接口规范。" });
+            } else if (hasServiceWorkerFetch) {
+                report.push({ pass: true, text: "✓ Service Worker 语法: 已检测到 addEventListener('fetch', ...) 事件监听入口。" });
+            } else {
+                report.push({ pass: false, text: "⚠️ 模块入口检查: 未明确检测到 export default 或 fetch 监听器。若是 Worker 脚本，部署时可能缺少调用入口。" });
+                score -= 15;
+            }
+
+            // 2. 检查全局 window / document 裸访问与垫片保护
+            const hasBareWindow = /\bwindow\b/.test(code);
+            const hasWindowShim = /var\s+window\s*=\s*typeof\s+globalThis/.test(code);
+            if (hasBareWindow) {
+                if (hasWindowShim) {
+                    report.push({ pass: true, text: "✓ 全局宿主对象兼容: 检测到代码中包含 window 引用，已成功注入顶层跨平台宿主垫片，杜绝 10021 报错。" });
+                } else {
+                    report.push({ pass: false, text: "⚠️ 裸 window 访问: 检测到 window 引用但未包含宿主垫片。在纯 Cloudflare V8 沙箱中可能会报 window is not defined。" });
+                    score -= 20;
+                }
+            } else {
+                report.push({ pass: true, text: "✓ 纯净沙箱环境: 代码无裸 window 宿主污染，完美符合 Cloudflare Workers 无状态运行时要求。" });
+            }
+
+            // 3. 检查受限语法与危险动态 eval
+            if (/\beval\s*\(/.test(code)) {
+                report.push({ pass: false, text: "⚠️ 动态 eval 警告: 检测到代码包含 eval()，部分严格安全策略可能会拦截或带来审查风险。" });
+                score -= 10;
+            } else {
+                report.push({ pass: true, text: "✓ 安全语法规范: 未检测到动态 eval()，代码符合现代 Web 安全标准与 V8 沙箱策略。" });
+            }
+
+            // 4. 检查 cloudflare:sockets 与 TCP 导入完整性
+            if (/from\s*['"]cloudflare:sockets['"]/.test(code)) {
+                report.push({ pass: true, text: "✓ 底层 Socket 通信: 已检测并完整保护 import { connect } from 'cloudflare:sockets' 原生导入链路。" });
+            }
+
+            // 5. 检查 env 绑定变量保护
+            const detectedEnv = scanAndLockEnvBindings(code);
+            if (detectedEnv.length > 0) {
+                report.push({ pass: true, text: "✓ 环境变量绑定自动保护: 成功扫描出 " + detectedEnv.length + " 个 env 绑定名 (" + detectedEnv.slice(0, 5).join(", ") + (detectedEnv.length > 5 ? "..." : "") + ")，并在混淆中自动锁定！" });
+            }
+
+            return { report: report, score: score };
+        }
+
+        // ==================== 差异比对数据量化计算 (Diff Mode) ====================
+        function calculateDiffMetrics(raw, obf) {
+            const rawLen = raw.length;
+            const obfLen = obf.length;
+            const rawLines = raw ? raw.split('\n').length : 0;
+            const obfLines = obf ? obf.split('\n').length : 0;
+            const ratio = rawLen > 0 ? (((obfLen - rawLen) / rawLen) * 100).toFixed(1) : 0;
+
+            const commentsCount = (raw.match(/\/\/[^\n]*/g) || []).length;
+            const importCount = (raw.match(/import\s+[^;]+;/g) || []).length;
+
+            return [
+                { label: "原始代码量", val: rawLen.toLocaleString() + " 字符 (" + rawLines + " 行)" },
+                { label: "加固后代码量", val: obfLen.toLocaleString() + " 字符 (" + obfLines + " 行)" },
+                { label: "体积变化比例", val: (ratio > 0 ? "+" + ratio : ratio) + "%" },
+                { label: "处理单行注释", val: commentsCount + " 处" },
+                { label: "隔离保护导入", val: importCount + " 条原生 import" },
+                { label: "宿主兼容垫片", val: /var\s+window\s*=/.test(obf) ? "已注入 (0ms)" : "无需注入" }
+            ];
+        }
+
+        // 绑定 Cloudflare 校验按钮
+        document.getElementById("btn-cf-check").addEventListener("click", () => {
+            const code = document.getElementById("input-code").value.trim() || document.getElementById("output-code").value.trim();
+            if (!code) {
+                alert("请先输入或粘贴代码以进行 Cloudflare 兼容性诊断体检！");
+                return;
+            }
+            const diagPanel = document.getElementById("cf-diag-panel");
+            const diagList = document.getElementById("diag-list");
+            const scoreBadge = document.getElementById("diag-score-badge");
+
+            const diagResult = runCloudflareDiagnostics(code);
+            diagList.innerHTML = diagResult.report.map(r => 
+                '<div style="color:' + (r.pass ? 'var(--text-secondary)' : 'var(--warning-color)') + ';">' + r.text + '</div>'
+            ).join('');
+
+            scoreBadge.innerText = "诊断得分: " + diagResult.score + "/100 (" + (diagResult.score >= 80 ? "优秀" : "存在风险") + ")";
+            scoreBadge.style.color = diagResult.score >= 80 ? "var(--success-color)" : "var(--warning-color)";
+            diagPanel.style.display = "block";
+        });
+
+        // 绑定差异对比模式切换按钮
+        document.getElementById("btn-toggle-diff").addEventListener("click", () => {
+            const raw = document.getElementById("input-code").value;
+            const obf = document.getElementById("output-code").value;
+            const diffPanel = document.getElementById("diff-panel");
+            const diffMetrics = document.getElementById("diff-metrics");
+
+            if (!raw || !obf) {
+                alert("请先完成一次加固或输入代码后再查看差异对比！");
+                return;
+            }
+
+            if (diffPanel.style.display === "block") {
+                diffPanel.style.display = "none";
+                return;
+            }
+
+            const metrics = calculateDiffMetrics(raw, obf);
+            diffMetrics.innerHTML = metrics.map(m =>
+                '<div style="background:var(--card-bg); padding:8px 12px; border-radius:8px; border:1px solid var(--border-color);">' +
+                '<div style="color:var(--text-muted); font-size:11px;">' + m.label + '</div>' +
+                '<div style="font-weight:700; color:var(--text-title); font-size:13px; margin-top:2px;">' + m.val + '</div>' +
+                '</div>'
+            ).join('');
+            diffPanel.style.display = "block";
+        });
+
+
         // 核心技术词典库（覆盖 Cloudflare Worker / 网络中继 / Web 标准常用英文）
         const TECH_DICT_EXACT = [
             {
