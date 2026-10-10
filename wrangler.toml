@@ -2,6 +2,8 @@ name = "cf-js-obfuscator"
 main = "worker.js"
 compatibility_date = "2024-09-23"
 
+# 双地址统一路由配置
 routes = [
-  { pattern = "js.205.dpdns.org/*", zone_name = "205.dpdns.org" }
+  { pattern = "js.205.dpdns.org/*", zone_name = "205.dpdns.org" },
+  { pattern = "js.201.dpdns.org/*", zone_name = "201.dpdns.org" }
 ]
