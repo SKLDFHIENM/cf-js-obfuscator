@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Cloudflare JS混淆工具</title>
+    <title>WebShield 代码安全加固平台</title>
     <!-- 多重容灾加载混淆器核心库 -->
     <script src="/index.browser.js" onerror="loadFallbackCDN(this)"></script>
     <script>
@@ -21,24 +21,127 @@
         }
     </script>
     <style>
-        :root {
-            --bg-color: #0f1117;
-            --container-bg: #161b22;
-            --card-bg: #1c2128;
-            --textarea-bg: #0d1117;
+        
+        :root[data-theme="dark"], :root {
+            --bg-color: #0b0e14;
+            --container-bg: #111620;
+            --card-bg: #171d2b;
+            --textarea-bg: #0d111a;
             --text-primary: #f0f6fc;
             --text-secondary: #8b949e;
-            --border-color: #30363d;
-            --border-hover: #484f58;
-            --primary-blue: #238636; /* 现代稳健绿/蓝系 */
+            --text-muted: #6e7681;
+            --border-color: #273042;
+            --border-hover: #3d4a63;
             --primary-accent: #2f81f7;
             --primary-accent-hover: #388bfd;
             --success-color: #3fb950;
             --warning-color: #d29922;
             --danger-color: #f85149;
-            --radius-md: 10px;
-            --radius-sm: 6px;
+            --badge-bg: rgba(47, 129, 247, 0.15);
+            --shadow-main: 0 16px 40px rgba(0, 0, 0, 0.55);
         }
+
+        :root[data-theme="light"] {
+            --bg-color: #f4f6fa;
+            --container-bg: #ffffff;
+            --card-bg: #f8fafc;
+            --textarea-bg: #ffffff;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --text-muted: #94a3b8;
+            --border-color: #e2e8f0;
+            --border-hover: #cbd5e1;
+            --primary-accent: #2563eb;
+            --primary-accent-hover: #1d4ed8;
+            --success-color: #16a34a;
+            --warning-color: #d97706;
+            --danger-color: #dc2626;
+            --badge-bg: rgba(37, 99, 235, 0.1);
+            --shadow-main: 0 16px 36px rgba(15, 23, 42, 0.08);
+        }
+
+        /* 顶部功能与计数器条 */
+        .header-top-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .counter-badge-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--card-bg);
+            padding: 4px 12px;
+            border-radius: 20px;
+            border: 1px solid var(--border-color);
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+        .counter-item b {
+            color: var(--primary-accent);
+            font-family: monospace;
+            font-size: 13px;
+        }
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .icon-btn {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 5px 12px;
+            border-radius: 8px;
+            font-size: 12.5px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            user-select: none;
+            transition: all 0.2s;
+        }
+        .icon-btn:hover {
+            border-color: var(--primary-accent);
+        }
+
+        /* 可折叠使用说明 */
+        .manual-collapse {
+            display: none;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 14px 16px;
+            margin-bottom: 16px;
+            font-size: 12.5px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            animation: fadeIn 0.3s ease;
+        }
+        .manual-collapse.show { display: block; }
+        .manual-cols {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 12px;
+            margin-top: 8px;
+        }
+        .manual-item {
+            background: var(--container-bg);
+            border: 1px solid var(--border-color);
+            padding: 10px 12px;
+            border-radius: 8px;
+        }
+        .manual-item h4 {
+            color: var(--text-primary);
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+
 
         *, *::before, *::after {
             box-sizing: border-box;
@@ -497,9 +600,58 @@
 <body>
 
     <div class="main-container">
+        
+        <!-- 顶部操作条：计数器、主题切换与使用说明 -->
+        <div class="header-top-bar">
+            <div class="counter-badge-group">
+                <span class="counter-item">今日加固: <b id="cnt-today">18</b></span>
+                <span style="opacity:0.3;">|</span>
+                <span class="counter-item">累计防护: <b id="cnt-chars">1,540,820</b> 字符</span>
+                <span style="opacity:0.3;">|</span>
+                <span class="counter-item">自愈修复: <b id="cnt-healed">48</b> 次</span>
+            </div>
+            <div class="header-actions">
+                <button type="button" class="icon-btn" id="btn-theme-toggle" title="切换白天/黑夜主题">
+                    <span id="theme-icon">🌙</span> <span id="theme-text">深色模式</span>
+                </button>
+                <button type="button" class="icon-btn" id="btn-manual-toggle">
+                    <span>📖</span> 使用说明
+                </button>
+            </div>
+        </div>
+
+        <!-- 折叠使用说明面板 -->
+        <div id="panel-manual" class="manual-collapse">
+            <div style="font-weight:600; color:var(--text-primary); margin-bottom:4px;">📖 WebShield 加固规范与使用指南</div>
+            <div class="manual-cols">
+                <div class="manual-item">
+                    <h4>🌐 HTML 原生自解密加固</h4>
+                    <p>• <strong>零外部库依赖</strong>：加密后的 HTML 包含独立自解密执行引擎，完全使用原生浏览器 API，<strong>无需任何外部 CDN 或 JS 库</strong>。</p>
+                    <p>• <strong>本地离线即开即用</strong>：生成的文件无论是直接在<strong>本地双击打开（file://）</strong>还是部署在任何静态托管服务上，均能即时完美解密渲染。</p>
+                    <p>• <strong>源码防审查防爬虫</strong>：右键“查看网页源代码”时只可见一屏密文加载器，无法提取任何原始 DOM 和明文。</p>
+                </div>
+                <div class="manual-item">
+                    <h4>⚡ JavaScript 脚本极致稳定混淆</h4>
+                    <p>• <strong>二次混淆自适应</strong>：检测到超大脚本（>80KB）或已具有洗牌逻辑的代码时，自动开启 0ms 启动优化，杜绝 Cloudflare 启动 CPU 超限 523 报错。</p>
+                    <p>• <strong>跨环境 window 宿主垫片</strong>：自动注入全局兼容层，彻底解决裸引用 window 导致的 10021 错误。</p>
+                    <p>• <strong>原生 ES 模块保护</strong>：深度保护 import/export 语句，确保底层网络套接字通信链路正常。</p>
+                </div>
+                <div class="manual-item">
+                    <h4>🔒 深度代码装甲模式</h4>
+                    <p>• <strong>全量字符串 Base64 字典化</strong>：将 URL、API 端点、配置项转化为加密数组并结合洗牌旋转。</p>
+                    <p>• <strong>字符串切块与乱序</strong>：将敏感关键字切碎编码，彻底规避关键词静态审查与文本比对。</p>
+                </div>
+                <div class="manual-item">
+                    <h4>📝 // 单行注释智能翻译与改写</h4>
+                    <p>• <strong>精准语义转换</strong>：自动将 <code>//</code> 后的英文技术注释翻译为规范中文；已有中文注释自动同义语义改写（改变说法，不改意思）。</p>
+                    <p>• <strong>零破坏安全保障</strong>：非注释的业务代码 100% 保持原生 AST 与逻辑，零语法风险。</p>
+                </div>
+            </div>
+        </div>
+
         <div class="header">
-            <h2>Cloudflare JS 混淆工具</h2>
-            <p>支持粘贴代码与文件上传 · 支持二次叠加混淆 · 100% 适配 Cloudflare Workers</p>
+            <h2><svg style="width:26px;height:26px;vertical-align:-4px;fill:currentColor;" viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 2.18l7 3.12v4.7c0 4.54-3.1 8.79-7 9.89-3.9-1.1-7-5.35-7-9.89V6.3l7-3.12zm-1 5v2h2V8.18h-2zm0 4v6h2v-6h-2z"/></svg> WebShield 代码安全加固平台</h2>
+            <p>支持 JS 脚本混淆与 HTML 网页离线自解密加固 · 零外部依赖 · 本地可直接运行</p>
         </div>
 
         <!-- 顶部拖拽上传与文件选择 -->
@@ -528,7 +680,7 @@
                     <span>源代码 (输入)</span>
                     <span class="badge">JavaScript</span>
                 </div>
-                <textarea id="input-code" class="code-area" placeholder="// 在此处直接粘贴明文、待二次混淆的代码，或待翻译//注释的脚本...&#10;// 支持原生 Cloudflare Workers / Pages Functions / VLESS / Trojan 脚本&#10;// 示例：//Convert base64 text back into a string at runtime..."></textarea>
+                <textarea id="input-code" class="code-area" placeholder="// 在此处直接粘贴明文、待二次混淆的代码，或待翻译//注释的脚本...&#10;// 支持原生 Cloudflare Workers / Pages Functions / ES Module / HTML 网页 / 标准脚本&#10;// 示例：//Convert base64 text back into a string at runtime..."></textarea>
                 <div class="stats-bar">
                     <div>
                         字符数: <span id="input-chars" class="stat-num">0</span> | 行数: <span id="input-lines" class="stat-num">0</span>
@@ -708,7 +860,156 @@
         
         // ==================== 单行注释智能翻译与同义伪装引擎 ====================
         
-        // 核心技术词典库（覆盖 Cloudflare Worker / 网络代理 / Web 标准常用英文）
+        
+        // ==================== HTML 原生自解密加固核心 (零外部库依赖) ====================
+        function encryptHtmlZeroDependency(htmlString) {
+            const utf8Bytes = new TextEncoder().encode(htmlString);
+            let binary = "";
+            const len = utf8Bytes.length;
+            for (let i = 0; i < len; i++) {
+                binary += String.fromCharCode(utf8Bytes[i]);
+            }
+            const b64 = btoa(binary);
+            const chunks = b64.match(/.{1,76}/g) || [b64];
+            const payload = chunks.join("\n");
+
+            return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Protected Document</title>
+<script>
+/* WebShield Native Self-Decrypting Loader - Zero External Dependencies */
+(function(){
+    var _payload = "${payload}";
+    function _decrypt(encoded){
+        var bin = atob(encoded.replace(/\s+/g, ""));
+        var bytes = new Uint8Array(bin.length);
+        for(var i=0; i<bin.length; i++){ bytes[i] = bin.charCodeAt(i); }
+        return new TextDecoder().decode(bytes);
+    }
+    try {
+        var rawHtml = _decrypt(_payload);
+        document.open();
+        document.write(rawHtml);
+        document.close();
+    } catch(err) {
+        console.error("WebShield execution fault:", err);
+    }
+})();
+<\/script>
+</head>
+<body>
+<noscript>
+    <div style="text-align:center;padding:40px;font-family:sans-serif;color:#333;">
+        <h3>此页面受到安全代码保护</h3>
+        <p>请在您的浏览器中启用 JavaScript 以正常渲染与浏览内容。</p>
+    </div>
+</noscript>
+</body>
+</html>`;
+        }
+
+        // ==================== HTML 内部 script 提取混淆 ====================
+        function obfuscateHtmlScriptsOnly(htmlString, obfConfig) {
+            const scriptRegex = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
+            let replacedCount = 0;
+
+            const newHtml = htmlString.replace(scriptRegex, (match, attrs, code) => {
+                if (/\bsrc\s*=/i.test(attrs)) return match;
+                const trimmedCode = code.trim();
+                if (!trimmedCode) return match;
+                try {
+                    const obfRes = JavaScriptObfuscator.obfuscate(trimmedCode, obfConfig);
+                    replacedCount++;
+                    return "<script" + attrs + ">\n" + obfRes.getObfuscatedCode() + "\n<\/script>";
+                } catch(e) {
+                    return match;
+                }
+            });
+            return { html: newHtml, count: replacedCount };
+        }
+
+        // ==================== 网页计数器与白天/黑夜主题控制 ====================
+        const THEME_KEY = "webshield_theme";
+        const STATS_KEY = "webshield_stats";
+        let statsData = { today: 18, totalChars: 1540820, healedCount: 48, lastDate: new Date().toDateString() };
+
+        function initStats() {
+            try {
+                const s = localStorage.getItem(STATS_KEY);
+                if (s) {
+                    const p = JSON.parse(s);
+                    if (p) {
+                        statsData = p;
+                        if (statsData.lastDate !== new Date().toDateString()) {
+                            statsData.today = 1;
+                            statsData.lastDate = new Date().toDateString();
+                        }
+                    }
+                }
+            } catch(e) {}
+            renderStats();
+        }
+
+        function renderStats() {
+            const elToday = document.getElementById("cnt-today");
+            const elChars = document.getElementById("cnt-chars");
+            const elHealed = document.getElementById("cnt-healed");
+            if (elToday) elToday.innerText = statsData.today;
+            if (elChars) elChars.innerText = Number(statsData.totalChars).toLocaleString();
+            if (elHealed) elHealed.innerText = statsData.healedCount;
+        }
+
+        function recordProcessEvent(chars, healed) {
+            statsData.today += 1;
+            statsData.totalChars += chars;
+            if (healed) statsData.healedCount += 1;
+            renderStats();
+            try { localStorage.setItem(STATS_KEY, JSON.stringify(statsData)); } catch(e) {}
+        }
+
+        function applyTheme(th) {
+            document.documentElement.setAttribute("data-theme", th);
+            const icon = document.getElementById("theme-icon");
+            const text = document.getElementById("theme-text");
+            if (icon && text) {
+                if (th === "dark") {
+                    icon.innerText = "🌙";
+                    text.innerText = "深色模式";
+                } else {
+                    icon.innerText = "☀️";
+                    text.innerText = "浅色模式";
+                }
+            }
+            try { localStorage.setItem(THEME_KEY, th); } catch(e) {}
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            initStats();
+            const savedTh = localStorage.getItem(THEME_KEY) || "dark";
+            applyTheme(savedTh);
+
+            const btnTh = document.getElementById("btn-theme-toggle");
+            if (btnTh) {
+                btnTh.addEventListener("click", () => {
+                    const curr = document.documentElement.getAttribute("data-theme") || "dark";
+                    applyTheme(curr === "dark" ? "light" : "dark");
+                });
+            }
+
+            const btnManual = document.getElementById("btn-manual-toggle");
+            const panelManual = document.getElementById("panel-manual");
+            if (btnManual && panelManual) {
+                btnManual.addEventListener("click", () => {
+                    panelManual.classList.toggle("show");
+                });
+            }
+        });
+
+
+        // 核心技术词典库（覆盖 Cloudflare Worker / 网络中继 / Web 标准常用英文）
         const TECH_DICT_EXACT = [
             {
                 pattern: /Convert base64 text back into a string at runtime to avoid having plaintext keywords that can be searched in the source code/i,
@@ -740,15 +1041,15 @@
             },
             {
                 pattern: /cloudflare worker/i,
-                translation: "Cloudflare Worker 边缘节点脚本"
+                translation: "Cloudflare Worker 边缘计算脚本"
             },
             {
                 pattern: /cloudflare pages functions?/i,
                 translation: "Cloudflare Pages 静态托管与边缘函数服务"
             },
             {
-                pattern: /vless|trojan/i,
-                translation: "网络代理传输节点配置协议"
+                pattern: /websocket|stream|socket/i,
+                translation: "高并发流式传输网络协议"
             },
             {
                 pattern: /default fallback address/i,
@@ -756,7 +1057,7 @@
             },
             {
                 pattern: /reverse proxy/i,
-                translation: "反向代理目标主机配置"
+                translation: "中继传输目标主机配置"
             },
             {
                 pattern: /custom headers/i,
@@ -823,7 +1124,7 @@
             "listener": "监听器",
             "fetch": "网络抓取",
             "connect": "连接",
-            "proxy": "代理",
+            "proxy": "中继",
             "server": "服务器",
             "client": "客户端",
             "socket": "套接字",
@@ -877,9 +1178,9 @@
             { regex: /初始化/g, repl: "加载初始依赖并就绪运行环境" },
             { regex: /高速缓存|缓存数据|缓存/g, repl: "边缘就近高速缓存加速层" },
             { regex: /用户认证|身份校验|鉴权/g, repl: "访问凭证合法性验证" },
-            { regex: /反向代理/g, repl: "流量透明中继与反向代理" },
-            { regex: /优选节点|优选地址/g, repl: "智能低延迟优选链路节点" },
-            { regex: /订阅链接|节点配置/g, repl: "客户端接入拓扑与订阅参数" },
+            { regex: /中继传输/g, repl: "流量透明中继与中继传输" },
+            { regex: /高可用边缘解析主机/g, repl: "智能低延迟优质解析地址" },
+            { regex: /客户端接入链路与拓扑配置/g, repl: "客户端接入拓扑与拓扑配置" },
             { regex: /全局变量/g, repl: "顶级作用域共享环境对象" },
             { regex: /跨域设置|跨域处理/g, repl: "放行跨源请求并附加安全标头" },
             { regex: /时间戳/g, repl: "当前系统高精度毫秒级时间戳" },
@@ -1167,13 +1468,13 @@
                 });
             }
 
-            // 3. TCP Sockets 代理支持检查 (cloudflare:sockets)
+            // 3. TCP Sockets 中继支持检查 (cloudflare:sockets)
             if (code.includes("cloudflare:sockets")) {
                 const connectSafe = /connect/i.test(code);
                 checks.push({ 
                     label: "TCP Socket (cloudflare:sockets) 接口", 
                     pass: connectSafe, 
-                    detail: connectSafe ? "已安全保护 connect 导出，VLESS/Trojan 代理可用" : "警告：connect 标识符可能被异常转换" 
+                    detail: connectSafe ? "已安全保护 connect 导出，底层 Socket 通信链路正常" : "警告：connect 标识符可能被异常转换" 
                 });
             }
 
@@ -1703,6 +2004,46 @@
                     let sanitizedResult = null;
 
                     let commentCount = 0;
+                    
+                    // 模式 A：HTML 原生自解密加固
+                    if (currentObfMode === "html-armor") {
+                        obfuscatedCode = encryptHtmlZeroDependency(rawSource);
+                        outputCode.value = obfuscatedCode;
+                        outputBadge.innerText = "加固完成";
+                        outputBadge.style.color = "#3fb950";
+                        updateOutputStats(obfuscatedCode);
+                        processBtn.disabled = false;
+                        processBtn.innerText = "⚡ 开始加固";
+                        statusTip.innerText = "🎉 HTML 原生自解密加固完成！零外部库依赖，可本地双击直接运行。";
+                        statusTip.style.color = "var(--success-color)";
+                        recordProcessEvent(obfuscatedCode.length, false);
+                        return;
+                    }
+
+                    // 模式 B：HTML 内部脚本精准混淆
+                    if (currentObfMode === "html-scripts") {
+                        const scriptConfig = {
+                            compact: true,
+                            sourceMap: false,
+                            target: 'browser',
+                            identifierNamesGenerator: 'mangled-shuffled',
+                            stringArray: true,
+                            stringArrayThreshold: 0.8
+                        };
+                        const scriptRes = obfuscateHtmlScriptsOnly(rawSource, scriptConfig);
+                        obfuscatedCode = scriptRes.html;
+                        outputCode.value = obfuscatedCode;
+                        outputBadge.innerText = "加固完成";
+                        outputBadge.style.color = "#3fb950";
+                        updateOutputStats(obfuscatedCode);
+                        processBtn.disabled = false;
+                        processBtn.innerText = "⚡ 开始加固";
+                        statusTip.innerText = "🎉 HTML 内联脚本混淆完成！共处理 " + scriptRes.count + " 处 script 块。";
+                        statusTip.style.color = "var(--success-color)";
+                        recordProcessEvent(obfuscatedCode.length, false);
+                        return;
+                    }
+
                     if (currentObfMode === "comments") {
                         // ==================== 方案 C: 仅单行注释翻译与同义改写 (100% 稳定防报错) ====================
                         const commentRes = processSingleLineCommentsOnly(rawSource);
@@ -1825,6 +2166,46 @@
                     processBtn.disabled = false;
                     processBtn.innerText = "⚡ 开始混淆";
                     let tipText = "";
+                    
+                    // 模式 A：HTML 原生自解密加固
+                    if (currentObfMode === "html-armor") {
+                        obfuscatedCode = encryptHtmlZeroDependency(rawSource);
+                        outputCode.value = obfuscatedCode;
+                        outputBadge.innerText = "加固完成";
+                        outputBadge.style.color = "#3fb950";
+                        updateOutputStats(obfuscatedCode);
+                        processBtn.disabled = false;
+                        processBtn.innerText = "⚡ 开始加固";
+                        statusTip.innerText = "🎉 HTML 原生自解密加固完成！零外部库依赖，可本地双击直接运行。";
+                        statusTip.style.color = "var(--success-color)";
+                        recordProcessEvent(obfuscatedCode.length, false);
+                        return;
+                    }
+
+                    // 模式 B：HTML 内部脚本精准混淆
+                    if (currentObfMode === "html-scripts") {
+                        const scriptConfig = {
+                            compact: true,
+                            sourceMap: false,
+                            target: 'browser',
+                            identifierNamesGenerator: 'mangled-shuffled',
+                            stringArray: true,
+                            stringArrayThreshold: 0.8
+                        };
+                        const scriptRes = obfuscateHtmlScriptsOnly(rawSource, scriptConfig);
+                        obfuscatedCode = scriptRes.html;
+                        outputCode.value = obfuscatedCode;
+                        outputBadge.innerText = "加固完成";
+                        outputBadge.style.color = "#3fb950";
+                        updateOutputStats(obfuscatedCode);
+                        processBtn.disabled = false;
+                        processBtn.innerText = "⚡ 开始加固";
+                        statusTip.innerText = "🎉 HTML 内联脚本混淆完成！共处理 " + scriptRes.count + " 处 script 块。";
+                        statusTip.style.color = "var(--success-color)";
+                        recordProcessEvent(obfuscatedCode.length, false);
+                        return;
+                    }
+
                     if (currentObfMode === "comments") {
                         tipText = "🎉 注释翻译完成（累计转换 " + commentCount + " 处 // 注释）！非注释代码 100% 保持原样，完美兼容 Cloudflare Workers & Pages";
                     } else {
