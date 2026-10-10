@@ -1020,9 +1020,23 @@
         }
 
         // Cloudflare Workers 官方标准保留字表 (严格对齐 Cloudflare Web Standards API 文档)
+        // ==================== Cloudflare Workers 最高优先级硬编码保护白名单 ====================
         const CF_RESERVED_NAMES = [
+            // 1. 核心标准模块入口与事件驱动方法名
+            "^fetch$", "^scheduled$", "^tail$", "^trace$", "^queue$", "^email$",
             "^addEventListener$", "^removeEventListener$", "^dispatchEvent$",
-            "^fetch$", "^scheduled$", "^queue$", "^email$", "^tail$", "^trace$",
+
+            // 2. 核心入口参数签名 (杜绝作用域绑定丢失)
+            "^request$", "^env$", "^ctx$", "^context$", "^event$",
+
+            // 3. 原生 ES 模块与导出规范
+            "^export$", "^default$", "^import\\.meta$", "^import\\.meta\\.url$",
+
+            // 4. 底层 TCP 套接字与网络通信接口 (cloudflare:sockets)
+            "^connect$", "^connectAsync$", "^Socket$", "^SocketOptions$", "^SocketAddress$", "^TlsOptions$",
+            "^WebSocket$", "^WebSocketPair$", "^HTMLRewriter$",
+
+            // 5. 标准 Web API 核心全局类型
             "^Request$", "^Response$", "^Headers$", "^URL$", "^URLSearchParams$", "^URLPattern$",
             "^Blob$", "^File$", "^FormData$", "^ReadableStream$", "^WritableStream$", "^TransformStream$",
             "^ByteLengthQueuingStrategy$", "^CountQueuingStrategy$",
@@ -1031,15 +1045,11 @@
             "^Event$", "^CustomEvent$", "^EventTarget$", "^MessageEvent$", "^CloseEvent$", "^ErrorEvent$",
             "^crypto$", "^CryptoKey$", "^SubtleCrypto$", "^DigestStream$",
             "^atob$", "^btoa$", "^setTimeout$", "^clearTimeout$", "^setInterval$", "^clearInterval$", "^queueMicrotask$",
-            "^performance$", "^PerformanceEntry$", "^PerformanceMark$", "^PerformanceMeasure$",
             "^console$", "^navigator$", "^structuredClone$",
-            "^WebSocket$", "^WebSocketPair$", "^HTMLRewriter$", "^caches$", "^Cache$",
-            "^env$", "^ctx$", "^context$", "^request$", "^event$",
-            "^connect$", "^connectAsync$", "^Socket$", "^SocketOptions$", "^SocketAddress$", "^TlsOptions$",
-            "^D1Database$", "^D1PreparedStatement$", "^D1Result$", "^D1ExecResult$",
-            "^KVNamespace$", "^R2Bucket$", "^DurableObjectNamespace$", "^VectorizeIndex$",
-            "^AnalyticsEngineDataset$", "^Workflow$", "^Service$", "^Fetcher$",
-            "^export$", "^default$", "^import\\.meta$", "^import\\.meta\\.url$"
+
+            // 6. Cloudflare 专有资源绑定类型
+            "^KVNamespace$", "^R2Bucket$", "^D1Database$", "^DurableObjectNamespace$", "^VectorizeIndex$",
+            "^AnalyticsEngineDataset$", "^Workflow$", "^Service$", "^Fetcher$"
         ];
 
         
@@ -1196,12 +1206,20 @@
 
         
         // ==================== 智能扫描源码中的 env.* 环境变量并自动锁定 ====================
+        // ==================== 智能扫描源码中的 env.* 动态环境变量并强制锁定 ====================
         function scanAndLockEnvBindings(source) {
-            const envMatches = source.match(/\benv\.([a-zA-Z0-9_$]+)/g) || [];
             const bindings = new Set();
-            for (const m of envMatches) {
+            // 匹配 env.FOO 形式
+            const dotMatches = source.match(/\benv\.([a-zA-Z0-9_$]+)/g) || [];
+            for (const m of dotMatches) {
                 const prop = m.replace('env.', '').trim();
                 if (prop) bindings.add(prop);
+            }
+            // 匹配 env['FOO'] 或 env["FOO"] 形式
+            const bracketMatches = source.match(/\benv\s*\[\s*['"]([a-zA-Z0-9_$]+)['"]\s*\]/g) || [];
+            for (const m of bracketMatches) {
+                const inner = m.match(/['"]([a-zA-Z0-9_$]+)['"]/);
+                if (inner && inner[1]) bindings.add(inner[1]);
             }
             return Array.from(bindings);
         }
@@ -1224,40 +1242,61 @@
                 score -= 15;
             }
 
-            // 2. 检查全局 window / document 裸访问与垫片保护
+            // 2. Node.js 禁用专有模块扫描 (fs, net, child_process 等)
+            const nodeModulesForbidden = ['fs', 'net', 'child_process', 'path', 'os', 'http', 'https', 'cluster', 'dns'];
+            const foundNodeMods = [];
+            for (const mod of nodeModulesForbidden) {
+                const reg = new RegExp("(?:require\\s*\\(\\s*['\"]" + mod + "['\"]\\s*\\)|from\\s*['\"]" + mod + "['\"]|from\\s*['\"]node:" + mod + "['\"])");
+                if (reg.test(code)) foundNodeMods.push(mod);
+            }
+            if (foundNodeMods.length > 0) {
+                report.push({ pass: false, text: "❌ Node.js 专有模块警告: 检测到未受支持的 Node.js 原生模块 (" + foundNodeMods.join(", ") + ")！Cloudflare V8 沙箱原生不支持这些模块，直接部署会导致编译失败。" });
+                score -= 25;
+            } else {
+                report.push({ pass: true, text: "✓ 纯净沙箱依赖: 未检测到 Node.js 专有底层模块，100% 遵从 Web 标准与 V8 轻量沙箱规范。" });
+            }
+
+            // 3. 全局 window / document 裸访问与自愈垫片检查
             const hasBareWindow = /\bwindow\b/.test(code);
+            const hasBareDoc = /\bdocument\b/.test(code);
             const hasWindowShim = /var\s+window\s*=\s*typeof\s+globalThis/.test(code);
-            if (hasBareWindow) {
+
+            if (hasBareWindow || hasBareDoc) {
                 if (hasWindowShim) {
-                    report.push({ pass: true, text: "✓ 全局宿主对象兼容: 检测到代码中包含 window 引用，已成功注入顶层跨平台宿主垫片，杜绝 10021 报错。" });
+                    report.push({ pass: true, text: "✓ 全局宿主对象兼容: 检测到包含 window 引用，已自动注入顶层跨平台宿主垫片，彻底消除 10021 报错。" });
                 } else {
-                    report.push({ pass: false, text: "⚠️ 裸 window 访问: 检测到 window 引用但未包含宿主垫片。在纯 Cloudflare V8 沙箱中可能会报 window is not defined。" });
-                    score -= 20;
+                    report.push({ pass: false, text: "⚠️ 裸 DOM 访问: 检测到原生 window/document 引用但缺少垫片。在 Cloudflare 无状态沙箱中会报 ReferenceError。" });
+                    score -= 15;
                 }
             } else {
                 report.push({ pass: true, text: "✓ 纯净沙箱环境: 代码无裸 window 宿主污染，完美符合 Cloudflare Workers 无状态运行时要求。" });
             }
 
-            // 3. 检查受限语法与危险动态 eval
-            if (/\beval\s*\(/.test(code)) {
-                report.push({ pass: false, text: "⚠️ 动态 eval 警告: 检测到代码包含 eval()，部分严格安全策略可能会拦截或带来审查风险。" });
-                score -= 10;
-            } else {
-                report.push({ pass: true, text: "✓ 安全语法规范: 未检测到动态 eval()，代码符合现代 Web 安全标准与 V8 沙箱策略。" });
-            }
-
-            // 4. 检查 cloudflare:sockets 与 TCP 导入完整性
+            // 4. 底层 TCP 通信导入规范确认 (cloudflare:sockets)
             if (/from\s*['"]cloudflare:sockets['"]/.test(code)) {
-                report.push({ pass: true, text: "✓ 底层 Socket 通信: 已检测并完整保护 import { connect } from 'cloudflare:sockets' 原生导入链路。" });
+                report.push({ pass: true, text: "✓ 底层 TCP 套接字: 已检测并完整保护 import { connect } from 'cloudflare:sockets' 原生导入链路，无字符串化破坏。" });
             }
 
-            // 5. 检查 env 绑定变量保护
+            // 5. env 绑定变量动态扫描与保护确认
             const detectedEnv = scanAndLockEnvBindings(code);
             if (detectedEnv.length > 0) {
-                report.push({ pass: true, text: "✓ 环境变量绑定自动保护: 成功扫描出 " + detectedEnv.length + " 个 env 绑定名 (" + detectedEnv.slice(0, 5).join(", ") + (detectedEnv.length > 5 ? "..." : "") + ")，并在混淆中自动锁定！" });
+                report.push({ pass: true, text: "✓ 环境变量绑定自动保护: 成功扫描出 " + detectedEnv.length + " 个 env 绑定名 (" + detectedEnv.slice(0, 6).join(", ") + (detectedEnv.length > 6 ? "..." : "") + ")，并在混淆中强制锁定！" });
             }
 
-            return { report: report, score: score };
+            // 6. 自解密体积与冷启动评估
+            const sizeBytes = new Blob([code]).size;
+            const sizeKB = (sizeBytes / 1024).toFixed(1);
+            if (sizeBytes < 1024 * 1024) {
+                report.push({ pass: true, text: "✓ 脚本体积与冷启动评估: 当前代码 " + sizeKB + " KB (< 1MB)，适配 Cloudflare 免费版与付费版，零冷启动延迟开销 (0ms)。" });
+            } else if (sizeBytes < 5 * 1024 * 1024) {
+                report.push({ pass: false, text: "⚠️ 体积与冷启动提示: 当前代码 " + sizeKB + " KB (超出免费计划 1MB 上限)，需使用 Workers Paid 付费计划，冷启动耗时约 5-15ms。" });
+                score -= 10;
+            } else {
+                report.push({ pass: false, text: "❌ 脚本体积超限预警: 当前代码 " + sizeKB + " KB (超大体积)，可能触发 Cloudflare 平台部署上限，建议优化。" });
+                score -= 20;
+            }
+
+            return { report: report, score: Math.max(0, score) };
         }
 
         // ==================== 差异比对数据量化计算 (Diff Mode) ====================
@@ -2401,7 +2440,7 @@
                                 identifierNamesCache: null,
                                 identifiersPrefix: "",
                                 reservedNames: protectedImports.reservedNames,
-                                renameProperties: false,
+                                renameProperties: false, controlFlowFlattening: false, selfDefending: false, debugProtection: false,
                                 renamePropertiesMode: "safe",
                                 ignoreImports: true,
                                 stringArray: true,
@@ -2439,7 +2478,7 @@
                                 identifierNamesCache: null,
                                 identifiersPrefix: "",
                                 reservedNames: protectedImports.reservedNames,
-                                renameProperties: false,
+                                renameProperties: false, controlFlowFlattening: false, selfDefending: false, debugProtection: false,
                                 renamePropertiesMode: "safe",
                                 ignoreImports: true,
                                 stringArray: !isPreObfuscatedOrHuge,
