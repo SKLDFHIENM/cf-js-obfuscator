@@ -1,0 +1,74 @@
+[
+  {
+    "name": "_worker (1).js",
+    "type": "worker",
+    "encoding": "utf-8",
+    "origKB": "596.28",
+    "obfKB": "596.38",
+    "ratio": "100.0%",
+    "timeMs": 3365,
+    "deploy": "SUCCESS",
+    "httpStatus": 200,
+    "httpBytes": 2293
+  },
+  {
+    "name": "_worker (2).js",
+    "type": "worker",
+    "encoding": "utf-8",
+    "origKB": "748.70",
+    "obfKB": "749.93",
+    "ratio": "100.2%",
+    "timeMs": 3105,
+    "deploy": "SUCCESS",
+    "httpStatus": 200,
+    "httpBytes": 2293
+  },
+  {
+    "name": "edgetunnel经典轻量版.txt",
+    "type": "worker",
+    "encoding": "utf-8",
+    "origKB": "38.97",
+    "obfKB": "21.35",
+    "ratio": "54.8%",
+    "timeMs": 126,
+    "deploy": "SUCCESS",
+    "httpStatus": 200,
+    "httpBytes": 5
+  },
+  {
+    "name": "CF-20260923cf.209.dpdns.org.txt",
+    "type": "worker",
+    "encoding": "gb18030",
+    "origKB": "27.42",
+    "obfKB": "12.15",
+    "ratio": "44.3%",
+    "timeMs": 64,
+    "deploy": "SUCCESS",
+    "httpStatus": 200,
+    "httpBytes": 5
+  },
+  {
+    "name": "创新创业知识图谱.html",
+    "type": "html",
+    "encoding": "utf-8",
+    "origKB": "69.53",
+    "obfKB": "93.22",
+    "ratio": "134.1%",
+    "timeMs": 0,
+    "deploy": "OFFLINE_VERIFIED",
+    "httpStatus": "PASS (100% DOM Restore)",
+    "httpBytes": 95462
+  },
+  {
+    "name": "管老师小组计分板.html",
+    "type": "html",
+    "encoding": "utf-8",
+    "origKB": "104.53",
+    "obfKB": "139.89",
+    "ratio": "133.8%",
+    "timeMs": 0,
+    "deploy": "OFFLINE_VERIFIED",
+    "httpStatus": "PASS (100% DOM Restore)",
+    "httpBytes": 143250
+  }
+]
