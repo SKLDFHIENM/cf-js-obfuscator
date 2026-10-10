@@ -1043,928 +1043,57 @@
                     continue;
                 }
 
-                // 4. 正则表达式字面量识别 (若前置标记为非标识符或为 ( = [ : , ! & | ? 等)
-                // 避免将 /= 等除法操作误判
+                // 4. 正则表达式字面量识别 (严格支持字符集 [...] 转义与标志位消费，杜绝将正则末尾 // 误识别为注释)
                 if (ch === '/' && next !== '/' && next !== '*') {
-                    // 判断是否为除法运算符还是正则表达式开始
-                    const prevNonSpace = result.trimEnd().slice(-1);
-                    const isRegexContext = !prevNonSpace || /[=(:[!,?&|;{]\+\-*/.test(prevNonSpace);
-                    if (isRegexContext) {
+                    function isRegexPrefixCtx(str) {
+                        let p = str.length - 1;
+                        while (p >= 0 && /\s/.test(str[p])) p--;
+                        if (p < 0) return true;
+                        const lastChar = str[p];
+                        if (/[=(:,;?![&|~^%*+\-<{]/.test(lastChar)) return true;
+                        
+                        let wEnd = p + 1;
+                        let wStart = p;
+                        while (wStart >= 0 && /[a-zA-Z0-9_$]/.test(str[wStart])) wStart--;
+                        const kw = str.slice(wStart + 1, wEnd);
+                        if (['return', 'case', 'typeof', 'delete', 'void', 'instanceof', 'in', 'of', 'throw', 'yield'].includes(kw)) {
+                            return true;
+                        }
+                        return false;
+                    }
+
+                    if (isRegexPrefixCtx(result)) {
                         result += ch;
                         i++;
+                        let inClass = false;
                         while (i < len) {
                             const c = sourceCode[i];
-                            result += c;
                             if (c === '\\') {
-                                if (i + 1 < len) {
-                                    result += sourceCode[i + 1];
-                                    i += 2;
-                                    continue;
-                                }
-                            } else if (c === '/') {
+                                result += sourceCode.slice(i, i + 2);
+                                i += 2;
+                                continue;
+                            } else if (c === '[') {
+                                inClass = true;
+                                result += c;
                                 i++;
+                            } else if (c === ']' && inClass) {
+                                inClass = false;
+                                result += c;
+                                i++;
+                            } else if (c === '/' && !inClass) {
+                                result += c;
+                                i++;
+                                while (i < len && /[a-z]/i.test(sourceCode[i])) {
+                                    result += sourceCode[i];
+                                    i++;
+                                }
                                 break;
                             } else if (c === '\n' || c === '\r') {
                                 break;
-                            }
-                            i++;
-                        }
-                        continue;
-                    }
-                }
-
-                // 5. 真正的单行注释 // ... -> 精准处理
-                if (ch === '/' && next === '/') {
-                    let commentText = "";
-                    i += 2;
-                    while (i < len && sourceCode[i] !== '\n' && sourceCode[i] !== '\r') {
-                        commentText += sourceCode[i];
-                        i++;
-                    }
-                    const processedComment = translateOrParaphraseComment(commentText);
-                    result += "//" + processedComment;
-                    commentCount++;
-                    continue;
-                }
-
-                result += ch;
-                i++;
-            }
-
-            return { code: result, commentCount: commentCount };
-        }
-
-
-        // Cloudflare Workers & Pages Functions 语法与兼容性深度预检
-        function verifyCloudflareCompatibility(code) {
-            const checks = [];
-            
-            // 1. JavaScript 语法结构解析校验
-            try {
-                const isModule = /(?:^|[\s;}])(?:import|export)\b/m.test(code);
-                if (!isModule) {
-                    new Function(code);
-                }
-                checks.push({ label: "JavaScript 基础语法结构", pass: true, detail: "语法解析正常，无语法中断与破坏" });
-            } catch (err) {
-                checks.push({ label: "JavaScript 基础语法结构", pass: false, detail: "语法解析异常: " + err.message });
-            }
-
-            // 2. Cloudflare Worker & Cloudflare Pages Functions 入口识别
-            const hasModuleFetch = /export\s+default\s*\{[\s\S]*?fetch\s*\(/i.test(code) || /export\s+default\s*/i.test(code);
-            const hasServiceWorker = /addEventListener\s*\(\s*[\x27\x22]fetch[\x27\x22]/i.test(code) || /addEventListener\s*\(\s*[\x27\x22]scheduled[\x27\x22]/i.test(code);
-            const hasPagesFunction = /export\s+(?:async\s+)?function\s+onRequest(?:Get|Post|Put|Delete|Head|Options)?\s*\(/i.test(code);
-
-            if (hasPagesFunction) {
-                checks.push({ 
-                    label: "Cloudflare Pages 运行入口", 
-                    pass: true, 
-                    detail: "检测到 Cloudflare Pages Functions 入口 (onRequest 路由函数)" 
-                });
-            } else if (hasModuleFetch) {
-                checks.push({ 
-                    label: "Cloudflare Worker 运行入口", 
-                    pass: true, 
-                    detail: "检测到 ES Module 规范入口 (export default { fetch })" 
-                });
-            } else if (hasServiceWorker) {
-                checks.push({ 
-                    label: "Cloudflare Worker 运行入口", 
-                    pass: true, 
-                    detail: "检测到 Service Worker 规范入口 (addEventListener)" 
-                });
-            } else {
-                checks.push({ 
-                    label: "Cloudflare 运行规范兼容", 
-                    pass: true, 
-                    detail: "通用/中间件/库脚本模式（可直接导入或嵌入 Workers/Pages 使用）" 
-                });
-            }
-
-            // 3. TCP Sockets 代理支持检查 (cloudflare:sockets)
-            if (code.includes("cloudflare:sockets")) {
-                const connectSafe = /connect/i.test(code);
-                checks.push({ 
-                    label: "TCP Socket (cloudflare:sockets) 接口", 
-                    pass: connectSafe, 
-                    detail: connectSafe ? "已安全保护 connect 导出，VLESS/Trojan 代理可用" : "警告：connect 标识符可能被异常转换" 
-                });
-            }
-
-            // 4. Web Standards 全局 API 兼容性检测
-            checks.push({
-                label: "Cloudflare Web Standards API 兼容性",
-                pass: true,
-                detail: "已严格保留 Response/Request/Headers/URL/WebSocket/crypto 等标准全局类"
-            });
-
-            // 5. 敏感未定义变量拦截 (防止 store_ 等缺失引用)
-            const undefinedStore = /\bstore_\b(?![a-zA-Z0-9_])/i.test(code) && !/(?:var|let|const|function)\s+store_/i.test(code);
-            if (undefinedStore) {
-                checks.push({
-                    label: "未声明变量引用预警 (store_)",
-                    pass: false,
-                    detail: "发现裸调用的 store_，若未在环境绑定中提供对应 KV/D1/变量，将抛出 store_ is not defined"
-                });
-            }
-
-            return checks;
-        }
-
-        function updateOutputStats(obfuscatedText) {
-            const inBytes = new Blob([inputCode.value]).size;
-            const chars = obfuscatedText.length;
-            const lines = chars > 0 ? obfuscatedText.split("\n").length : 0;
-            const outBytes = new Blob([obfuscatedText]).size;
-
-            outputChars.innerText = chars.toLocaleString();
-            outputLines.innerText = lines.toLocaleString();
-            outputBytes.innerText = formatBytes(outBytes);
-
-            if (inBytes > 0) {
-                const diff = ((outBytes - inBytes) / inBytes * 100).toFixed(1);
-                ratioText.innerText = (diff >= 0 ? "+" : "") + diff + "%";
-                ratioText.style.color = diff >= 0 ? "#58a6ff" : "#4caf50";
-            } else {
-                ratioText.innerText = "0%";
-            }
-
-            
-            // 自动触发 Cloudflare 兼容性预检
-            const cfChecks = verifyCloudflareCompatibility(obfuscatedText);
-            const allPassed = cfChecks.every(c => c.pass);
-            if (allPassed) {
-                outputBadge.innerText = "✅ Cloudflare 校验通过";
-                outputBadge.style.background = "rgba(76, 175, 80, 0.15)";
-                outputBadge.style.color = "#4caf50";
-                outputBadge.title = cfChecks.map(c => c.label + ": " + c.detail).join("\n");
-            } else {
-                outputBadge.innerText = "⚠️ 需检查兼容性";
-                outputBadge.style.background = "rgba(244, 67, 54, 0.15)";
-                outputBadge.style.color = "#f44336";
-                outputBadge.title = cfChecks.map(c => c.label + ": " + c.detail).join("\n");
-            }
-
-            copyBtn.disabled = chars === 0;
-            verifyBtn.disabled = chars === 0;
-            downloadBtn.disabled = chars === 0;
-        }
-
-        // 智能检测输入框是否含有残损/非法乱码字符，并在界面实时给予自愈提示
-        function checkInputGarbledStatus() {
-            const val = inputCode.value;
-            const inputBadge = document.querySelector(".editor-card:first-child .editor-header .badge");
-            let isGarbled = false;
-            for (let idx = 0; idx < Math.min(val.length, 5000); idx++) {
-                const codePoint = val.charCodeAt(idx);
-                if (codePoint === 0xFFFD || (codePoint > 127 && (codePoint < 0x4E00 || codePoint > 0x9FFF) && (codePoint < 0x3400 || codePoint > 0x4DBF) && !/[　-〿＀-￯ -⁯]/.test(val[idx]))) {
-                    isGarbled = true;
-                    break;
-                }
-            }
-
-            if (isGarbled) {
-                if (inputBadge) {
-                    inputBadge.innerText = "⚠️ 包含乱码/残损字符 (混淆时将自动智能自愈修复)";
-                    inputBadge.style.color = "#d29922";
-                    inputBadge.style.background = "rgba(210, 153, 34, 0.15)";
-                }
-            } else {
-                if (inputBadge) {
-                    inputBadge.innerText = "JavaScript";
-                    inputBadge.style.color = "#58a6ff";
-                    inputBadge.style.background = "rgba(47, 129, 247, 0.15)";
-                }
-            }
-        }
-
-        inputCode.addEventListener("input", () => {
-            updateInputStats();
-            checkInputGarbledStatus();
-        });
-
-        // 拖拽文件逻辑
-        ["dragenter", "dragover", "dragleave", "drop"].forEach(name => {
-            uploadBar.addEventListener(name, e => { e.preventDefault(); e.stopPropagation(); });
-        });
-        uploadBar.addEventListener("dragover", () => uploadBar.classList.add("dragover"));
-        ["dragleave", "drop"].forEach(name => uploadBar.addEventListener(name, () => uploadBar.classList.remove("dragover")));
-        uploadBar.addEventListener("drop", e => handleFiles(e.dataTransfer.files));
-        uploadBar.addEventListener("click", () => fileInput.click());
-        fileInput.addEventListener("change", e => handleFiles(e.target.files));
-
-        let currentLoadedFile = null;
-        let currentLoadedArrayBuffer = null;
-
-        // 智能编码自动探测与无乱码解码器 (解决 Windows 中文 ANSI/GBK 格式文件在 FileReader 误以 UTF-8 读取产生的 乱码)
-        function smartDecodeArrayBuffer(arrayBuffer, preferredEncoding) {
-            const bytes = new Uint8Array(arrayBuffer);
-
-            // 1. 优先检查标准 BOM 标记
-            if (bytes.length >= 3 && bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
-                return { text: new TextDecoder("utf-8").decode(bytes.slice(3)), encoding: "UTF-8 (BOM)" };
-            }
-            if (bytes.length >= 2 && bytes[0] === 0xFE && bytes[1] === 0xFF) {
-                return { text: new TextDecoder("utf-16be").decode(bytes.slice(2)), encoding: "UTF-16BE" };
-            }
-            if (bytes.length >= 2 && bytes[0] === 0xFF && bytes[1] === 0xFE) {
-                return { text: new TextDecoder("utf-16le").decode(bytes.slice(2)), encoding: "UTF-16LE" };
-            }
-
-            // 2. 若用户手动指定了编码，优先使用
-            if (preferredEncoding && preferredEncoding !== "auto") {
-                try {
-                    const decoder = new TextDecoder(preferredEncoding);
-                    return { text: decoder.decode(bytes), encoding: preferredEncoding.toUpperCase() };
-                } catch(e) {}
-            }
-
-            // 3. 严格检测 UTF-8（fatal: true 遇到非 UTF-8 字节会立即抛错）
-            try {
-                const strictUtf8 = new TextDecoder("utf-8", { fatal: true });
-                const utf8Text = strictUtf8.decode(bytes);
-                if (!utf8Text.includes("\uFFFD")) {
-                    return { text: utf8Text, encoding: "UTF-8" };
-                }
-            } catch (err) {
-                // UTF-8 校验失败，必然是 Windows 中文系统默认的 ANSI (GBK / GB2312 / GB18030)
-            }
-
-            // 4. Windows 中文环境默认编码 GB18030 / GBK 探测尝试
-            try {
-                const gbkDecoder = new TextDecoder("gb18030");
-                const gbkText = gbkDecoder.decode(bytes);
-                return { text: gbkText, encoding: "GB18030/GBK (自动纠偏)" };
-            } catch (err) {
-                return { text: new TextDecoder("utf-8").decode(bytes), encoding: "UTF-8" };
-            }
-        }
-
-        // 智能净化残损与非法字符标识符（解决剪贴板误粘贴、残损 UTF-8 乱码导致的 Unexpected character 词法解析崩溃）
-                // 智能检测字符是否为标准合法的 JS 标识符字符（支持 ASCII 字母数字与 CJK 统一汉字）
-        function isLegalJsIdChar(ch) {
-            if (/[a-zA-Z0-9_$]/.test(ch)) return true;
-            const code = ch.charCodeAt(0);
-            if (code >= 0x4E00 && code <= 0x9FFF) return true; // CJK 统一表意文字
-            if (code >= 0x3400 && code <= 0x4DBF) return true; // CJK 扩展 A
-            return false;
-        }
-
-        // 智能净化残损与非法字符标识符（彻底根治误粘贴、损坏编码引起的 Unexpected character 词法崩溃）
-        function sanitizeDamagedCode(sourceCode) {
-            // 步骤 1: 预处理修复残损的 import 语句 (如 import { connect as  } 或带乱码的 connect as )
-            let code = sourceCode.replace(/import\s*\{\s*connect(?:\s+as\s+([^\}]+))?\s*\}\s*from\s*(['"]cloudflare:sockets['"])/g, (match, asName, mod) => {
-                const cleanName = (asName || '').trim();
-                if (!cleanName || cleanName.includes('\uFFFD') || !isLegalJsIdChar(cleanName[0])) {
-                    return 'import { connect as 连接 } from ' + mod;
-                }
-                return match;
-            });
-
-            // 检查是否包含任何非法字符
-            let hasIllegalChars = false;
-            for (let idx = 0; idx < code.length; idx++) {
-                const c = code[idx];
-                const codePoint = c.charCodeAt(0);
-                if (codePoint > 127 && (codePoint < 0x4E00 || codePoint > 0x9FFF) && (codePoint < 0x3400 || codePoint > 0x4DBF)) {
-                    hasIllegalChars = true;
-                    break;
-                }
-            }
-
-            if (!hasIllegalChars) {
-                return { code: code, healed: false, fixCount: 0 };
-            }
-
-            let result = "";
-            let i = 0;
-            const len = code.length;
-            let varCounter = 1;
-            const varMap = new Map();
-
-            function getSafeVar(token) {
-                if (!varMap.has(token)) {
-                    varMap.set(token, "_cf_var_" + (varCounter++));
-                }
-                return varMap.get(token);
-            }
-
-            while (i < len) {
-                const ch = code[i];
-                const next = code[i + 1];
-
-                // 1. 单行注释 //
-                if (ch === "/" && next === "/") {
-                    const endIdx = code.indexOf("\n", i + 2);
-                    if (endIdx === -1) {
-                        result += code.slice(i);
-                        break;
-                    } else {
-                        result += code.slice(i, endIdx);
-                        i = endIdx;
-                        continue;
-                    }
-                }
-
-                // 2. 多行注释 /* ... */
-                if (ch === "/" && next === "*") {
-                    const endIdx = code.indexOf("*/", i + 2);
-                    if (endIdx === -1) {
-                        result += code.slice(i);
-                        break;
-                    } else {
-                        result += code.slice(i, endIdx + 2);
-                        i = endIdx + 2;
-                        continue;
-                    }
-                }
-
-                // 3. 字符串字面量 "..." 或 '...'
-                if (ch === '"' || ch === "'") {
-                    const quote = ch;
-                    result += quote;
-                    i++;
-                    while (i < len) {
-                        const c = code[i];
-                        if (c === "\\") {
-                            result += code.slice(i, i + 2);
-                            i += 2;
-                        } else if (c === quote) {
-                            result += c;
-                            i++;
-                            break;
-                        } else {
-                            result += c;
-                            i++;
-                        }
-                    }
-                    continue;
-                }
-
-                // 4. 模板字符串 `...`
-                if (ch === "`") {
-                    result += ch;
-                    i++;
-                    while (i < len) {
-                        const c = code[i];
-                        if (c === "\\") {
-                            result += code.slice(i, i + 2);
-                            i += 2;
-                        } else if (c === "$" && code[i + 1] === "{") {
-                            result += "${";
-                            i += 2;
-                            let depth = 1;
-                            let expr = "";
-                            while (i < len && depth > 0) {
-                                if (code[i] === "{") depth++;
-                                else if (code[i] === "}") {
-                                    depth--;
-                                    if (depth === 0) break;
-                                }
-                                expr += code[i];
+                            } else {
+                                result += c;
                                 i++;
                             }
-                            const healedExpr = sanitizeDamagedCode(expr);
-                            result += healedExpr.code + "}";
-                            if (i < len) i++;
-                        } else if (c === "`") {
-                            result += c;
-                            i++;
-                            break;
-                        } else {
-                            result += c;
-                            i++;
-                        }
-                    }
-                    continue;
-                }
-
-                // 5. 标识符与操作符切词，捕获非法乱码标识符
-                if (!/[\s,;(){}\[\]+\-*\/%&|^!~?:=<>.]/.test(ch)) {
-                    let end = i;
-                    while (end < len && !/[\s,;(){}\[\]+\-*\/%&|^!~?:=<>.]/.test(code[end])) {
-                        end++;
-                    }
-                    const token = code.slice(i, end);
-                    let isBroken = false;
-                    for (let k = 0; k < token.length; k++) {
-                        if (!isLegalJsIdChar(token[k])) {
-                            isBroken = true;
-                            break;
-                        }
-                    }
-
-                    if (isBroken) {
-                        result += getSafeVar(token);
-                    } else {
-                        result += token;
-                    }
-                    i = end;
-                    continue;
-                }
-
-                result += ch;
-                i++;
-            }
-
-            return { code: result, healed: true, fixCount: varMap.size };
-        }
-
-        // 提取并保护 Cloudflare Workers 原生 ES Module 导入 (import ... from 'cloudflare:sockets')
-        // 彻底根治混淆器将模块路径转义为十六进制或篡改 import 别名导致 Workers 523/运行时报错
-        function extractAndProtectImports(sourceCode, baseReserved) {
-            const lines = sourceCode.split("\n");
-            const importHeaders = [];
-            const bodyLines = [];
-            const dynamicReserved = new Set(baseReserved);
-
-            let i = 0;
-            while (i < lines.length) {
-                const line = lines[i];
-                const trimmed = line.trim();
-
-                // 识别 // @ts-ignore 或 // @ts-nocheck 紧随 import
-                if (trimmed.startsWith("// @ts-ignore") || trimmed.startsWith("// @ts-nocheck")) {
-                    if (i + 1 < lines.length && lines[i + 1].trim().startsWith("import ")) {
-                        importHeaders.push(line);
-                        importHeaders.push(lines[i + 1]);
-                        parseImportIdentifiers(lines[i + 1].trim(), dynamicReserved);
-                        i += 2;
-                        continue;
-                    }
-                }
-
-                // 识别原生 import 语句
-                if (trimmed.startsWith("import ") && trimmed.includes("from ")) {
-                    importHeaders.push(line);
-                    parseImportIdentifiers(trimmed, dynamicReserved);
-                    i++;
-                    continue;
-                }
-
-                bodyLines.push(line);
-                i++;
-            }
-
-            return {
-                importHeader: importHeaders.join("\n"),
-                bodyCode: bodyLines.join("\n"),
-                reservedNames: Array.from(dynamicReserved)
-            };
-        }
-
-        function parseImportIdentifiers(importLine, reservedSet) {
-            try {
-                const namedMatch = importLine.match(/import\s*\{([\s\S]*?)\}\s*from/);
-                if (namedMatch) {
-                    const parts = namedMatch[1].split(",");
-                    for (const part of parts) {
-                        const asMatch = part.trim().match(/([a-zA-Z0-9_\$\u0080-\uFFFF]+)\s+as\s+([a-zA-Z0-9_\$\u0080-\uFFFF]+)/);
-                        if (asMatch) {
-                            reservedSet.add("^" + asMatch[1] + "$");
-                            reservedSet.add("^" + asMatch[2] + "$");
-                        } else {
-                            const single = part.trim();
-                            if (single) reservedSet.add("^" + single + "$");
-                        }
-                    }
-                }
-                const defaultMatch = importLine.match(/import\s+([a-zA-Z0-9_\$\u0080-\uFFFF]+)\s+from/);
-                if (defaultMatch) {
-                    reservedSet.add("^" + defaultMatch[1] + "$");
-                }
-            } catch (e) {}
-        }
-
-        function updateInputStats() {
-            const text = inputCode.value;
-            const chars = text.length;
-            const lines = chars > 0 ? text.split("\n").length : 0;
-            const byteSize = new Blob([text]).size;
-
-            inputChars.innerText = chars.toLocaleString();
-            inputLines.innerText = lines.toLocaleString();
-            inputBytes.innerText = formatBytes(byteSize);
-
-            processBtn.disabled = chars === 0;
-            if (chars > 0) {
-                statusTip.innerText = "代码已就绪，点击【开始混淆】";
-                statusTip.style.color = "#9e9e9e";
-            } else {
-                statusTip.innerText = "等待输入代码";
-                statusTip.style.color = "#9e9e9e";
-            }
-        }
-
-        
-        // Cloudflare Workers 语法与兼容性深度预检
-        
-        let currentObfMode = "armor";
-
-        function selectObfMode(mode) {
-            currentObfMode = mode;
-            const modes = ["armor", "safe", "comments"];
-            modes.forEach(m => {
-                const r = document.getElementById("mode-" + m);
-                const l = document.getElementById("label-mode-" + m);
-                if (r && l) {
-                    if (m === mode) {
-                        r.checked = true;
-                        l.classList.add("active");
-                    } else {
-                        r.checked = false;
-                        l.classList.remove("active");
-                    }
-                }
-            });
-        }
-
-        // Cloudflare Workers 官方标准保留字表 (严格对齐 Cloudflare Web Standards API 文档)
-        const CF_RESERVED_NAMES = [
-            "^addEventListener$", "^removeEventListener$", "^dispatchEvent$",
-            "^fetch$", "^scheduled$", "^queue$", "^email$", "^tail$", "^trace$",
-            "^Request$", "^Response$", "^Headers$", "^URL$", "^URLSearchParams$", "^URLPattern$",
-            "^Blob$", "^File$", "^FormData$", "^ReadableStream$", "^WritableStream$", "^TransformStream$",
-            "^ByteLengthQueuingStrategy$", "^CountQueuingStrategy$",
-            "^TextEncoder$", "^TextDecoder$", "^TextEncoderStream$", "^TextDecoderStream$",
-            "^CompressionStream$", "^DecompressionStream$",
-            "^Event$", "^CustomEvent$", "^EventTarget$", "^MessageEvent$", "^CloseEvent$", "^ErrorEvent$",
-            "^crypto$", "^CryptoKey$", "^SubtleCrypto$", "^DigestStream$",
-            "^atob$", "^btoa$", "^setTimeout$", "^clearTimeout$", "^setInterval$", "^clearInterval$", "^queueMicrotask$",
-            "^performance$", "^PerformanceEntry$", "^PerformanceMark$", "^PerformanceMeasure$",
-            "^console$", "^navigator$", "^structuredClone$",
-            "^WebSocket$", "^WebSocketPair$", "^HTMLRewriter$", "^caches$", "^Cache$",
-            "^env$", "^ctx$", "^context$", "^request$", "^event$",
-            "^connect$", "^connectAsync$", "^Socket$", "^SocketOptions$", "^SocketAddress$", "^TlsOptions$",
-            "^D1Database$", "^D1PreparedStatement$", "^D1Result$", "^D1ExecResult$",
-            "^KVNamespace$", "^R2Bucket$", "^DurableObjectNamespace$", "^VectorizeIndex$",
-            "^AnalyticsEngineDataset$", "^Workflow$", "^Service$", "^Fetcher$",
-            "^export$", "^default$", "^import\\.meta$", "^import\\.meta\\.url$"
-        ];
-
-        
-        // ==================== 单行注释智能翻译与同义伪装引擎 ====================
-        
-        // 核心技术词典库（覆盖 Cloudflare Worker / 网络代理 / Web 标准常用英文）
-        const TECH_DICT_EXACT = [
-            {
-                pattern: /Convert base64 text back into a string at runtime to avoid having plaintext keywords that can be searched in the source code/i,
-                translation: "运行时把 base64 文本还原成字符串，避免源码里出现可被检索的明文关键词"
-            },
-            {
-                pattern: /Convert base64 text back into a string at runtime/i,
-                translation: "运行时把 base64 格式文本动态解码还原为原始字符串"
-            },
-            {
-                pattern: /avoid having plaintext keywords that can be searched in the source code/i,
-                translation: "规避在源代码工程中暴露可被静态检索的明文字符串"
-            },
-            {
-                pattern: /handle incoming http fetch event/i,
-                translation: "处理客户端接入的 HTTP Fetch 网络请求事件"
-            },
-            {
-                pattern: /handle request/i,
-                translation: "执行客户端请求的路由分发与逻辑处理"
-            },
-            {
-                pattern: /handle incoming request/i,
-                translation: "处理接入的外部网络请求报文"
-            },
-            {
-                pattern: /websocket connection/i,
-                translation: "建立与维护 WebSocket 双向实时数据通道"
-            },
-            {
-                pattern: /cloudflare worker/i,
-                translation: "Cloudflare Worker 边缘节点脚本"
-            },
-            {
-                pattern: /cloudflare pages functions?/i,
-                translation: "Cloudflare Pages 静态托管与边缘函数服务"
-            },
-            {
-                pattern: /vless|trojan/i,
-                translation: "网络代理传输节点配置协议"
-            },
-            {
-                pattern: /default fallback address/i,
-                translation: "默认回退与故障转移服务器地址"
-            },
-            {
-                pattern: /reverse proxy/i,
-                translation: "反向代理目标主机配置"
-            },
-            {
-                pattern: /custom headers/i,
-                translation: "自定义安全请求标头集合"
-            },
-            {
-                pattern: /error handling/i,
-                translation: "执行安全容错拦截与异常恢复逻辑"
-            },
-            {
-                pattern: /parse url query parameters/i,
-                translation: "解析 URL 请求路径中的 Query 查询参数"
-            },
-            {
-                pattern: /check authorization token/i,
-                translation: "校验请求头中的身份授权与访问令牌"
-            },
-            {
-                pattern: /generate unique request id/i,
-                translation: "生成全链路追踪的唯一定位请求 ID"
-            },
-            {
-                pattern: /read response body as json/i,
-                translation: "以 JSON 数据结构读取并反序列化响应报文"
-            },
-            {
-                pattern: /send response to client/i,
-                translation: "组装完成并向客户端输出 HTTP 响应报文"
-            },
-            {
-                pattern: /cache hit|cache miss/i,
-                translation: "查询边缘就近缓存命中与穿透状态"
-            },
-            {
-                pattern: /rate limit exceeded/i,
-                translation: "访问频次已触发系统全局限流防护阈值"
-            },
-            {
-                pattern: /tls handshake/i,
-                translation: "安全传输层 TLS 证书协商与安全握手"
-            },
-            {
-                pattern: /cors headers/i,
-                translation: "注入跨域资源共享（CORS）安全响应标头"
-            }];
-
-        // 单词级通用词典
-        const WORD_MAP = {
-            "convert": "转换",
-            "base64": "base64",
-            "text": "文本",
-            "string": "字符串",
-            "runtime": "运行时",
-            "avoid": "避免",
-            "plaintext": "明文",
-            "keywords": "关键词",
-            "searched": "检索",
-            "source": "源码",
-            "code": "代码",
-            "handle": "处理",
-            "request": "请求",
-            "response": "响应",
-            "event": "事件",
-            "listener": "监听器",
-            "fetch": "网络抓取",
-            "connect": "连接",
-            "proxy": "代理",
-            "server": "服务器",
-            "client": "客户端",
-            "socket": "套接字",
-            "stream": "数据流",
-            "buffer": "缓冲区",
-            "header": "请求头",
-            "headers": "标头列表",
-            "url": "网址路径",
-            "path": "路径",
-            "token": "令牌凭证",
-            "auth": "身份认证",
-            "config": "配置参数",
-            "options": "选项",
-            "route": "路由",
-            "router": "路由器",
-            "error": "异常错误",
-            "catch": "捕获",
-            "success": "成功",
-            "fail": "失败",
-            "failed": "执行失败",
-            "return": "返回数据",
-            "init": "初始化",
-            "initialize": "就绪环境",
-            "update": "更新",
-            "check": "校验检查",
-            "validate": "验证合规性",
-            "cache": "边缘缓存",
-            "uuid": "唯一标识码",
-            "port": "端口号",
-            "host": "目标主机",
-            "hostname": "域名主机名",
-            "method": "请求方法",
-            "status": "状态码",
-            "body": "报文体",
-            "json": "JSON数据",
-            "parse": "解析",
-            "stringify": "序列化",
-            "encode": "编码",
-            "decode": "解码"
-        };
-
-        // 中文同义改写库（改变说法，不改变意思）
-        const ZH_PARAPHRASE_RULES = [
-            { regex: /返回正常响应|返回响应/g, repl: "向客户端回复成功状态报文" },
-            { regex: /处理请求/g, repl: "调度并执行接入的请求流程" },
-            { regex: /解析域名|域名解析/g, repl: "执行主机域名的 DNS 寻址" },
-            { regex: /配置参数|配置信息/g, repl: "系统策略设定与关键配置项" },
-            { regex: /连接成功/g, repl: "网络套接字链路已就绪" },
-            { regex: /连接失败|连接中断/g, repl: "网络通信链路发生中断或握手异常" },
-            { regex: /错误处理|异常捕获/g, repl: "执行安全容错拦截与异常恢复" },
-            { regex: /初始化/g, repl: "加载初始依赖并就绪运行环境" },
-            { regex: /高速缓存|缓存数据|缓存/g, repl: "边缘就近高速缓存加速层" },
-            { regex: /用户认证|身份校验|鉴权/g, repl: "访问凭证合法性验证" },
-            { regex: /反向代理/g, repl: "流量透明中继与反向代理" },
-            { regex: /优选节点|优选地址/g, repl: "智能低延迟优选链路节点" },
-            { regex: /订阅链接|节点配置/g, repl: "客户端接入拓扑与订阅参数" },
-            { regex: /全局变量/g, repl: "顶级作用域共享环境对象" },
-            { regex: /跨域设置|跨域处理/g, repl: "放行跨源请求并附加安全标头" },
-            { regex: /时间戳/g, repl: "当前系统高精度毫秒级时间戳" },
-            { regex: /状态码/g, repl: "HTTP 协议响应状态标识码" },
-            { regex: /数据流/g, repl: "底层可读写二进制传输管道流" },
-            { regex: /请求头/g, repl: "客户端传入的协议元数据标头" }];
-
-        // 判定文本是否主要为英文
-        function isEnglishDominant(text) {
-            const trimmed = text.trim();
-            if (!trimmed) return false;
-            const letters = (trimmed.match(/[a-zA-Z]/g) || []).length;
-            const chinese = (trimmed.match(/[\u4e00-\u9fa5]/g) || []).length;
-            return letters > chinese && letters >= 4;
-        }
-
-        // 单句英文翻译器
-        function translateEnPhrase(enText) {
-            const raw = enText.trim();
-            // 1. 精准匹配专业短语
-            for (const item of TECH_DICT_EXACT) {
-                if (item.pattern.test(raw)) {
-                    return item.translation;
-                }
-            }
-
-            // 2. 词汇级别替换并连贯组词
-            let translated = raw;
-            const sortedWords = Object.keys(WORD_MAP).sort((a, b) => b.length - a.length);
-            for (const word of sortedWords) {
-                const reg = new RegExp("\\b" + word + "\\b", "gi");
-                translated = translated.replace(reg, WORD_MAP[word]);
-            }
-
-            // 如果已经部分汉化，做语法润色
-            translated = translated
-                .replace(/\bat\s+runtime\b/gi, "在运行时")
-                .replace(/\bto\s+avoid\b/gi, "以规避")
-                .replace(/\bback\s+into\b/gi, "还原为")
-                .replace(/\bin\s+the\b/gi, "在")
-                .replace(/\bof\b/gi, "的")
-                .replace(/\bfor\b/gi, "用于")
-                .replace(/\bwith\b/gi, "携带")
-                .replace(/\bfrom\b/gi, "来自")
-                .replace(/\band\b/gi, "并且")
-                .replace(/\bor\b/gi, "或者")
-                .replace(/\bif\b/gi, "如果")
-                .replace(/\bcan\s+be\b/gi, "可被");
-
-            // 去除多余英文符号连接
-            if (isEnglishDominant(translated)) {
-                // 若仍有生词，前置中文语义标注
-                return "执行相关逻辑: " + translated;
-            }
-            return translated;
-        }
-
-        // 中文同义改写器（换说法不改意思）
-        function paraphraseChinese(zhText) {
-            let res = zhText;
-            let changed = false;
-            for (const rule of ZH_PARAPHRASE_RULES) {
-                if (rule.regex.test(res)) {
-                    res = res.replace(rule.regex, rule.repl);
-                    changed = true;
-                }
-            }
-            // 若未触发专用规则，做语气与修辞转换（如加前缀或润色词）
-            if (!changed) {
-                const prefixes = ["注：", "说明：", "提示：", "逻辑："];
-                const clean = res.trim().replace(/^(注[：:]|说明[：:]|提示[：:]|逻辑[：:])\s*/, "");
-                // 轮换修辞
-                res = " " + prefixes[Math.abs(clean.length) % prefixes.length] + clean;
-            }
-            return res;
-        }
-
-        // 单条单行注释综合处理
-        function translateOrParaphraseComment(rawComment) {
-            const trimmed = rawComment.trim();
-            if (!trimmed) return rawComment;
-
-            if (isEnglishDominant(trimmed)) {
-                // 英文 -> 翻译为精准中文
-                return " " + translateEnPhrase(trimmed);
-            } else {
-                // 中文 -> 改变说法，不改变意思
-                return " " + paraphraseChinese(trimmed);
-            }
-        }
-
-        // 语法级代码扫描器：精准提取并仅替换 // 注释，绝对不改变任何其他代码
-        function processSingleLineCommentsOnly(sourceCode) {
-            let result = "";
-            let i = 0;
-            let commentCount = 0;
-            const len = sourceCode.length;
-
-            while (i < len) {
-                const ch = sourceCode[i];
-                const next = i + 1 < len ? sourceCode[i + 1] : "";
-
-                // 1. 双引号或单引号字符串常量 -> 完整保留
-                if (ch === '"' || ch === "'") {
-                    const quote = ch;
-                    result += quote;
-                    i++;
-                    while (i < len) {
-                        const c = sourceCode[i];
-                        result += c;
-                        if (c === '\\') {
-                            if (i + 1 < len) {
-                                result += sourceCode[i + 1];
-                                i += 2;
-                                continue;
-                            }
-                        } else if (c === quote) {
-                            i++;
-                            break;
-                        }
-                        i++;
-                    }
-                    continue;
-                }
-
-                // 2. 模板字符串 `...` -> 完整保留
-                if (ch === '`') {
-                    result += '`';
-                    i++;
-                    while (i < len) {
-                        const c = sourceCode[i];
-                        result += c;
-                        if (c === '\\') {
-                            if (i + 1 < len) {
-                                result += sourceCode[i + 1];
-                                i += 2;
-                                continue;
-                            }
-                        } else if (c === '`') {
-                            i++;
-                            break;
-                        }
-                        i++;
-                    }
-                    continue;
-                }
-
-                // 3. 块级注释 /* ... */ -> 完整保留
-                if (ch === '/' && next === '*') {
-                    result += "/*";
-                    i += 2;
-                    while (i < len) {
-                        if (sourceCode[i] === '*' && i + 1 < len && sourceCode[i + 1] === '/') {
-                            result += "*/";
-                            i += 2;
-                            break;
-                        }
-                        result += sourceCode[i];
-                        i++;
-                    }
-                    continue;
-                }
-
-                // 4. 正则表达式字面量识别 (若前置标记为非标识符或为 ( = [ : , ! & | ? 等)
-                // 避免将 /= 等除法操作误判
-                if (ch === '/' && next !== '/' && next !== '*') {
-                    // 判断是否为除法运算符还是正则表达式开始
-                    const prevNonSpace = result.trimEnd().slice(-1);
-                    const isRegexContext = !prevNonSpace || /[=(:[!,?&|;{]\+\-*/.test(prevNonSpace);
-                    if (isRegexContext) {
-                        result += ch;
-                        i++;
-                        while (i < len) {
-                            const c = sourceCode[i];
-                            result += c;
-                            if (c === '\\') {
-                                if (i + 1 < len) {
-                                    result += sourceCode[i + 1];
-                                    i += 2;
-                                    continue;
-                                }
-                            } else if (c === '/') {
-                                i++;
-                                break;
-                            } else if (c === '\n' || c === '\r') {
-                                break;
-                            }
-                            i++;
                         }
                         continue;
                     }
@@ -2189,14 +1318,44 @@
         }
 
         // 智能净化残损与非法字符标识符（解决剪贴板误粘贴、残损 UTF-8 乱码导致的 Unexpected character 词法解析崩溃）
+                // 智能检测字符是否为标准合法的 JS 标识符字符（支持 ASCII 字母数字与 CJK 统一汉字）
+        function isLegalJsIdChar(ch) {
+            if (/[a-zA-Z0-9_$]/.test(ch)) return true;
+            const code = ch.charCodeAt(0);
+            if (code >= 0x4E00 && code <= 0x9FFF) return true; // CJK 统一表意文字
+            if (code >= 0x3400 && code <= 0x4DBF) return true; // CJK 扩展 A
+            return false;
+        }
+
+        // 智能净化残损与非法字符标识符（彻底根治误粘贴、损坏编码引起的 Unexpected character 词法崩溃）
         function sanitizeDamagedCode(sourceCode) {
-            if (!sourceCode.includes("\uFFFD")) {
-                return { code: sourceCode, healed: false, fixCount: 0 };
+            // 步骤 1: 预处理修复残损的 import 语句 (如 import { connect as  } 或带乱码的 connect as )
+            let code = sourceCode.replace(/import\s*\{\s*connect(?:\s+as\s+([^\}]+))?\s*\}\s*from\s*(['"]cloudflare:sockets['"])/g, (match, asName, mod) => {
+                const cleanName = (asName || '').trim();
+                if (!cleanName || cleanName.includes('\uFFFD') || !isLegalJsIdChar(cleanName[0])) {
+                    return 'import { connect as 连接 } from ' + mod;
+                }
+                return match;
+            });
+
+            // 检查是否包含任何非法/残损字符（\uFFFD 或损坏的非 CJK 统一表意生僻码点）
+            let hasIllegalChars = false;
+            for (let idx = 0; idx < code.length; idx++) {
+                const c = code[idx];
+                const codePoint = c.charCodeAt(0);
+                if (codePoint === 0xFFFD || (codePoint > 127 && (codePoint < 0x4E00 || codePoint > 0x9FFF) && (codePoint < 0x3400 || codePoint > 0x4DBF) && !/[\u3000-\u303F\uFF00-\uFFEF\u2000-\u206F]/.test(c))) {
+                    hasIllegalChars = true;
+                    break;
+                }
+            }
+
+            if (!hasIllegalChars) {
+                return { code: code, healed: false, fixCount: 0 };
             }
 
             let result = "";
             let i = 0;
-            const len = sourceCode.length;
+            const len = code.length;
             let varCounter = 1;
             const varMap = new Map();
 
@@ -2207,45 +1366,96 @@
                 return varMap.get(token);
             }
 
-            while (i < len) {
-                const ch = sourceCode[i];
-                const next = sourceCode[i + 1];
+            function isRegexPrefix(str, pos) {
+                let p = pos - 1;
+                while (p >= 0 && /\s/.test(str[p])) p--;
+                if (p < 0) return true;
+                const lastChar = str[p];
+                if (/[=(:,;?![&|~^%*+\-<{]/.test(lastChar)) return true;
+                
+                let wEnd = p + 1;
+                let wStart = p;
+                while (wStart >= 0 && /[a-zA-Z0-9_$]/.test(str[wStart])) wStart--;
+                const kw = str.slice(wStart + 1, wEnd);
+                if (['return', 'case', 'typeof', 'delete', 'void', 'instanceof', 'in', 'of', 'throw', 'yield'].includes(kw)) {
+                    return true;
+                }
+                return false;
+            }
 
-                // 1. 单行注释
-                if (ch === "/" && next === "/") {
-                    const endIdx = sourceCode.indexOf("\n", i + 2);
+            while (i < len) {
+                const ch = code[i];
+                const next = i + 1 < len ? code[i + 1] : '';
+
+                // 1. 单行注释 //
+                if (ch === '/' && next === '/') {
+                    const endIdx = code.indexOf('\n', i + 2);
                     if (endIdx === -1) {
-                        result += sourceCode.slice(i);
+                        result += code.slice(i);
                         break;
                     } else {
-                        result += sourceCode.slice(i, endIdx);
+                        result += code.slice(i, endIdx);
                         i = endIdx;
                         continue;
                     }
                 }
 
-                // 2. 多行注释
-                if (ch === "/" && next === "*") {
-                    const endIdx = sourceCode.indexOf("*/", i + 2);
+                // 2. 多行注释 /* ... */
+                if (ch === '/' && next === '*') {
+                    const endIdx = code.indexOf('*/', i + 2);
                     if (endIdx === -1) {
-                        result += sourceCode.slice(i);
+                        result += code.slice(i);
                         break;
                     } else {
-                        result += sourceCode.slice(i, endIdx + 2);
+                        result += code.slice(i, endIdx + 2);
                         i = endIdx + 2;
                         continue;
                     }
                 }
 
-                // 3. 字符串字面量
+                // 3. 正则表达式字面量 /.../flags
+                if (ch === '/' && next !== '/' && next !== '*' && isRegexPrefix(code, i)) {
+                    result += ch;
+                    i++;
+                    let inClass = false;
+                    while (i < len) {
+                        const c = code[i];
+                        if (c === '\\') {
+                            result += code.slice(i, i + 2);
+                            i += 2;
+                        } else if (c === '[') {
+                            inClass = true;
+                            result += c;
+                            i++;
+                        } else if (c === ']' && inClass) {
+                            inClass = false;
+                            result += c;
+                            i++;
+                        } else if (c === '/' && !inClass) {
+                            result += c;
+                            i++;
+                            while (i < len && /[a-z]/i.test(code[i])) {
+                                result += code[i];
+                                i++;
+                            }
+                            break;
+                        } else {
+                            result += c;
+                            i++;
+                        }
+                    }
+                    continue;
+                }
+
+                // 4. 字符串字面量 "..." 或 '...'
                 if (ch === '"' || ch === "'") {
                     const quote = ch;
                     result += quote;
                     i++;
                     while (i < len) {
-                        const c = sourceCode[i];
-                        if (c === "\\") {
-                            result += sourceCode.slice(i, i + 2);
+                        const c = code[i];
+                        if (c === '\\') {
+                            result += code.slice(i, i + 2);
                             i += 2;
                         } else if (c === quote) {
                             result += c;
@@ -2259,33 +1469,33 @@
                     continue;
                 }
 
-                // 4. 模板字符串
-                if (ch === "`") {
+                // 5. 模板字符串 `...`
+                if (ch === '`') {
                     result += ch;
                     i++;
                     while (i < len) {
-                        const c = sourceCode[i];
-                        if (c === "\\") {
-                            result += sourceCode.slice(i, i + 2);
+                        const c = code[i];
+                        if (c === '\\') {
+                            result += code.slice(i, i + 2);
                             i += 2;
-                        } else if (c === "$" && sourceCode[i + 1] === "{") {
-                            result += "${";
+                        } else if (c === '$' && code[i + 1] === '{') {
+                            result += '${';
                             i += 2;
                             let depth = 1;
-                            let expr = "";
+                            let expr = '';
                             while (i < len && depth > 0) {
-                                if (sourceCode[i] === "{") depth++;
-                                else if (sourceCode[i] === "}") {
+                                if (code[i] === '{') depth++;
+                                else if (code[i] === '}') {
                                     depth--;
                                     if (depth === 0) break;
                                 }
-                                expr += sourceCode[i];
+                                expr += code[i];
                                 i++;
                             }
                             const healedExpr = sanitizeDamagedCode(expr);
-                            result += healedExpr.code + "}";
+                            result += healedExpr.code + '}';
                             if (i < len) i++;
-                        } else if (c === "`") {
+                        } else if (c === '`') {
                             result += c;
                             i++;
                             break;
@@ -2297,25 +1507,27 @@
                     continue;
                 }
 
-                // 5. 标识符检测（将包含非法 \uFFFD 的非安全标识符统一清洗为合法全局唯一变量）
-                if (/[a-zA-Z0-9_\$\u0080-\uFFFF]/.test(ch)) {
+                // 6. 标识符提取与非法字符识别
+                if (ch === '\uFFFD' || (code.charCodeAt(i) > 127 && !isLegalJsIdChar(ch) && !/[\u3000-\u303F\uFF00-\uFFEF\u2000-\u206F]/.test(ch)) || /[a-zA-Z0-9_$]/.test(ch)) {
                     let end = i;
-                    while (end < len && /[a-zA-Z0-9_\$\u0080-\uFFFF]/.test(sourceCode[end])) {
+                    while (end < len && (!/[\s,;(){}\[\]+\-*\/%&|^!~?:=<>.]/.test(code[end]) || code[end] === '\uFFFD')) {
                         end++;
                     }
-                    const token = sourceCode.slice(i, end);
-                    if (token.includes("\uFFFD")) {
+                    const token = code.slice(i, end);
+                    let hasIllegal = false;
+                    for (let k = 0; k < token.length; k++) {
+                        if (!isLegalJsIdChar(token[k])) {
+                            hasIllegal = true;
+                            break;
+                        }
+                    }
+
+                    if (hasIllegal) {
                         result += getSafeVar(token);
                     } else {
                         result += token;
                     }
                     i = end;
-                    continue;
-                }
-
-                if (ch === "\uFFFD") {
-                    result += getSafeVar(ch);
-                    i++;
                     continue;
                 }
 
@@ -2326,70 +1538,55 @@
             return { code: result, healed: true, fixCount: varMap.size };
         }
 
-        // 提取并保护 Cloudflare Workers 原生 ES Module 导入 (import ... from 'cloudflare:sockets')
+        // 提取并强保护 Cloudflare Workers / Pages 原生 ES Module 导入（支持多行、默认、命名及命名空间导入）
         // 彻底根治混淆器将模块路径转义为十六进制或篡改 import 别名导致 Workers 523/运行时报错
         function extractAndProtectImports(sourceCode, baseReserved) {
-            const lines = sourceCode.split("\n");
-            const importHeaders = [];
-            const bodyLines = [];
+            const importRegex = /(?:(?:\/\/|\/\*)[^\n]*\n\s*)*import\s+(?:(?:\*\s+as\s+[a-zA-Z0-9_\$\u0080-\uFFFF]+|[a-zA-Z0-9_\$\u0080-\uFFFF]+(?:\s*,\s*\{[\s\S]*?\})?|\{[\s\S]*?\})\s+from\s+)?['"][^'"]+['"];?/g;
+
             const dynamicReserved = new Set(baseReserved);
+            const importStatements = [];
 
-            let i = 0;
-            while (i < lines.length) {
-                const line = lines[i];
-                const trimmed = line.trim();
+            let match;
+            while ((match = importRegex.exec(sourceCode)) !== null) {
+                const fullMatch = match[0].trim();
+                importStatements.push(fullMatch);
 
-                // 识别 // @ts-ignore 或 // @ts-nocheck 紧随 import
-                if (trimmed.startsWith("// @ts-ignore") || trimmed.startsWith("// @ts-nocheck")) {
-                    if (i + 1 < lines.length && lines[i + 1].trim().startsWith("import ")) {
-                        importHeaders.push(line);
-                        importHeaders.push(lines[i + 1]);
-                        parseImportIdentifiers(lines[i + 1].trim(), dynamicReserved);
-                        i += 2;
-                        continue;
-                    }
-                }
-
-                // 识别原生 import 语句
-                if (trimmed.startsWith("import ") && trimmed.includes("from ")) {
-                    importHeaders.push(line);
-                    parseImportIdentifiers(trimmed, dynamicReserved);
-                    i++;
-                    continue;
-                }
-
-                bodyLines.push(line);
-                i++;
-            }
-
-            return {
-                importHeader: importHeaders.join("\n"),
-                bodyCode: bodyLines.join("\n"),
-                reservedNames: Array.from(dynamicReserved)
-            };
-        }
-
-        function parseImportIdentifiers(importLine, reservedSet) {
-            try {
-                const namedMatch = importLine.match(/import\s*\{([\s\S]*?)\}\s*from/);
+                // 1. 命名导入 { a as b, c }
+                const namedMatch = fullMatch.match(/\{([\s\S]*?)\}/);
                 if (namedMatch) {
-                    const parts = namedMatch[1].split(",");
-                    for (const part of parts) {
-                        const asMatch = part.trim().match(/([a-zA-Z0-9_\$\u0080-\uFFFF]+)\s+as\s+([a-zA-Z0-9_\$\u0080-\uFFFF]+)/);
+                    const items = namedMatch[1].split(',');
+                    for (const item of items) {
+                        const asMatch = item.trim().match(/([a-zA-Z0-9_\$\u0080-\uFFFF]+)\s+as\s+([a-zA-Z0-9_\$\u0080-\uFFFF]+)/);
                         if (asMatch) {
-                            reservedSet.add("^" + asMatch[1] + "$");
-                            reservedSet.add("^" + asMatch[2] + "$");
+                            dynamicReserved.add('^' + asMatch[1] + '$');
+                            dynamicReserved.add('^' + asMatch[2] + '$');
                         } else {
-                            const single = part.trim();
-                            if (single) reservedSet.add("^" + single + "$");
+                            const single = item.trim();
+                            if (single) dynamicReserved.add('^' + single + '$');
                         }
                     }
                 }
-                const defaultMatch = importLine.match(/import\s+([a-zA-Z0-9_\$\u0080-\uFFFF]+)\s+from/);
-                if (defaultMatch) {
-                    reservedSet.add("^" + defaultMatch[1] + "$");
+
+                // 2. 默认导入 import DefaultName from ...
+                const defaultMatch = fullMatch.match(/import\s+([a-zA-Z0-9_\$\u0080-\uFFFF]+)\s*(?:,|$|\s+from)/);
+                if (defaultMatch && defaultMatch[1] !== '*' && defaultMatch[1] !== '{') {
+                    dynamicReserved.add('^' + defaultMatch[1] + '$');
                 }
-            } catch (e) {}
+
+                // 3. 命名空间导入 import * as Name from ...
+                const nsMatch = fullMatch.match(/\*\s+as\s+([a-zA-Z0-9_\$\u0080-\uFFFF]+)/);
+                if (nsMatch) {
+                    dynamicReserved.add('^' + nsMatch[1] + '$');
+                }
+            }
+
+            let cleanBody = sourceCode.replace(importRegex, '').trim();
+
+            return {
+                importHeader: importStatements.join('\n\n'),
+                bodyCode: cleanBody,
+                reservedNames: Array.from(dynamicReserved)
+            };
         }
 
         const encodingSelect = document.getElementById("encoding-select");
